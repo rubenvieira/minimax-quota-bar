@@ -1,0 +1,112 @@
+# MiniMaxQuotaBar
+
+A macOS menu bar app that displays your MiniMax API quota usage in real-time.
+
+![macOS Menu Bar](https://img.shields.io/badge/macOS-13.0%2B-blue)
+![Swift](https://img.shields.io/badge/Swift-5.9-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+## Features
+
+- 📊 **Real-time quota monitoring** - Displays your MiniMax API usage percentage in the menu bar
+- 🔄 **Auto-refresh** - Automatically updates every 5 minutes
+- 🎨 **Status indicators** - Color-coded status (🟢 healthy / 🟡 warning / 🔴 critical)
+- 🍎 **Native macOS** - Runs as a menu bar app (no dock icon)
+- 🔐 **Secure** - API key stored locally, never transmitted anywhere except to MiniMax
+
+## Installation
+
+### From Release
+
+1. Download the latest `.app` from [Releases](https://github.com/yourusername/minimax-quota-bar/releases)
+2. Move to `/Applications/`
+3. Run the app
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/minimax-quota-bar.git
+cd minimax-quota-bar
+
+# Generate Xcode project
+xcodegen generate
+
+# Build
+xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configuration Release build
+
+# The app will be in ~/Library/Developer/Xcode/DerivedData/MiniMaxQuotaBar-*/Build/Products/Release/
+```
+
+## Setup
+
+1. **Set your API key**:
+   ```bash
+   echo "your-minimax-api-key" > ~/.config/opencode/minimax-key.txt
+   ```
+   
+   Or set the `MINIMAX_API_KEY` environment variable.
+
+2. **Launch the app** - It will appear in your menu bar
+
+3. **(Optional) Add to Login Items**:
+   - System Settings → General → Login Items
+   - Add "MiniMaxQuotaBar"
+
+## Usage
+
+- Click the percentage in the menu bar to see details
+- **Refresh** - Manually refresh quota data
+- **Quit** - Exit the app
+
+## Configuration
+
+| Method | Description |
+|--------|-------------|
+| `~/.config/opencode/minimax-key.txt` | API key file (recommended) |
+| `MINIMAX_API_KEY` env var | Environment variable |
+
+## Status Colors
+
+| Usage | Color | Emoji |
+|-------|-------|-------|
+| 0-75% | Green | 🟢 |
+| 75-90% | Yellow | 🟡 |
+| 90-100% | Red | 🔴 |
+
+## Tech Stack
+
+- **Swift 5.9** - Programming language
+- **AppKit** - Native macOS UI framework
+- **URLSession** - Network requests
+- **Foundation** - Core utilities
+
+## Project Structure
+
+```
+MiniMaxQuotaBar/
+├── Sources/
+│   └── MiniMaxQuotaBarApp.swift   # Main app code
+├── Assets.xcassets/                # App icons
+├── project.yml                     # XcodeGen configuration
+├── README.md                       # This file
+└── LICENSE                        # MIT License
+```
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) first.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- [MiniMax API](https://platform.minimaxi.com) - For providing the quota API
+- [OpenCode](https://opencode.ai) - Inspiration for this project

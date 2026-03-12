@@ -14,6 +14,10 @@ A macOS menu bar app that displays your MiniMax API quota usage in real-time.
 - 🍎 **Native macOS** - Runs as a menu bar app (no dock icon)
 - 🔐 **Secure** - API key stored locally, never transmitted anywhere except to MiniMax
 
+## Screenshot
+
+![MiniMaxQuotaBar Screenshot](minimax-quota-bar.png)
+
 ## Installation
 
 ### From Release

@@ -8,6 +8,70 @@
 
 import Foundation
 import AppKit
+import Security
+
+// MARK: - Keychain Helper
+
+enum Keychain {
+    static let service = "com.opencode.minimax-quota-bar"
+    static let account = "minimax-api-key"
+    
+    static func save(_ key: String) -> Bool {
+        let data = Data(key.utf8)
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+        
+        let attributes: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+        ]
+        
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+    
+    static func load() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let key = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        
+        return key
+    }
+    
+    static func delete() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+}
+import AppKit
 
 // MARK: - App Entry Point
 
@@ -79,6 +143,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         refreshItem.toolTip = "Refresh quota data"
         menu.addItem(refreshItem)
         
+        // Settings option
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        settingsItem.toolTip = "Configure API key and preferences"
+        menu.addItem(settingsItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         // Quit option
@@ -102,6 +172,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Manually refreshes quota data
     @objc func refresh() {
         fetchQuota()
+    }
+    
+    /// Opens settings dialog to configure API key
+    @objc func openSettings() {
+        let alert = NSAlert()
+        alert.messageText = "MiniMax API Key"
+        alert.informativeText = "Enter your MiniMax API key. The key will be stored securely in macOS Keychain."
+        alert.alertStyle = .informational
+        
+        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        inputField.placeholderString = "Enter API key..."
+        inputField.stringValue = getApiKey() ?? ""
+        alert.accessoryView = inputField
+        
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        
+        if response == .alertFirstButtonReturn {
+            let apiKey = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                if setApiKey(apiKey) {
+                    fetchQuota()
+                } else {
+                    let errorAlert = NSAlert()
+                    errorAlert.messageText = "Error"
+                    errorAlert.informativeText = "Failed to save API key to Keychain."
+                    errorAlert.alertStyle = .warning
+                    errorAlert.runModal()
+                }
+            }
+        }
     }
     
     /// Quits the application
@@ -211,15 +314,21 @@ enum QuotaError: Error, LocalizedError {
 
 // MARK: - API Methods
 
-/// Retrieves the API key from local storage or environment variables.
+/// Retrieves the API key from secure storage.
 ///
 /// Priority:
-/// 1. `~/.config/opencode/minimax-key.txt` file
-/// 2. `MINIMAX_API_KEY` environment variable
+/// 1. macOS Keychain (recommended)
+/// 2. `~/.config/opencode/minimax-key.txt` file
+/// 3. `MINIMAX_API_KEY` environment variable
 ///
 /// - Returns: The API key if found, nil otherwise
 func getApiKey() -> String? {
-    // Try to read from file first (recommended)
+    // Try Keychain first (most secure)
+    if let key = Keychain.load() {
+        return key
+    }
+    
+    // Fall back to file
     let keyPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/opencode/minimax-key.txt")
     
@@ -233,6 +342,23 @@ func getApiKey() -> String? {
     }
     
     return nil
+}
+
+/// Saves the API key securely to macOS Keychain.
+///
+/// - Parameter key: The API key to store
+/// - Returns: True if successful, false otherwise
+@discardableResult
+func setApiKey(_ key: String) -> Bool {
+    return Keychain.save(key)
+}
+
+/// Removes the API key from Keychain.
+///
+/// - Returns: True if successful, false otherwise
+@discardableResult
+func removeApiKey() -> Bool {
+    return Keychain.delete()
 }
 
 /// Fetches the current quota from the MiniMax API.

@@ -35,7 +35,13 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ### Copy to Applications (after build)
 ```bash
-cp -R ~/Library/Developer/Xcode/DerivedData/MiniMaxQuotaBar-*/Build/Products/Debug/MiniMaxQuotaBar.app /Applications/
+cp -R ~/Library/Developer/Xcode/DerivedData/MiniMaxQuotaBar-enccfvsfpntloqgxpjnoizmxzkde/Build/Products/Debug/MiniMaxQuotaBar.app /Applications/
+```
+
+### Rebuild & Install (Debug)
+```bash
+xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configuration Debug build && \
+cp -R ~/Library/Developer/Xcode/DerivedData/MiniMaxQuotaBar-enccfvsfpntloqgxpjnoizmxzkde/Build/Products/Debug/MiniMaxQuotaBar.app /Applications/
 ```
 
 ### Run App
@@ -43,14 +49,23 @@ cp -R ~/Library/Developer/Xcode/DerivedData/MiniMaxQuotaBar-*/Build/Products/Deb
 open /Applications/MiniMaxQuotaBar.app
 ```
 
+### Testing
+```bash
+# Run all tests
+xcodebuild test -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar
+
+# Run a single test class
+xcodebuild test -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -only-testing:TestClassName
+
+# Run a single test method
+xcodebuild test -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -only-testing:TestClassName/testMethodName
+```
+
 ## Code Style Guidelines
 
 ### Imports
-
-- Group imports by framework: `Foundation`, `AppKit`, third-party
-- Prefer specific imports over module imports when possible
-- Order: standard library → system frameworks → third-party
-
+- Group: Foundation → AppKit → Security → third-party
+- Prefer specific imports over module imports
 ```swift
 import Foundation
 import AppKit
@@ -58,130 +73,92 @@ import Security
 ```
 
 ### Formatting
-
-- Use 4 spaces for indentation (Swift standard)
-- Maximum line length: 100 characters
-- Add spaces around operators: `let x = 1 + 2`
+- 4 spaces for indentation
+- Max line length: 100 characters
+- Spaces around operators: `let x = 1 + 2`
 - No trailing whitespace
-- Use `// MARK: -` for code organization
+- Use `// MARK: -` for organization
 
-### Naming Conventions
-
-- **Types/Classes/Enums**: PascalCase (`AppDelegate`, `Keychain`, `QuotaResult`)
+### Naming
+- **Types/Classes/Enums**: PascalCase (`AppDelegate`, `Keychain`)
 - **Functions/Methods**: camelCase (`fetchQuota()`, `updateStatusItem()`)
 - **Properties/Variables**: camelCase (`statusItem`, `refreshInterval`)
-- **Constants**: camelCase or PascalCase for static enums (`service`, `account`)
-- **File names**: PascalCase matching primary type (`MiniMaxQuotaBarApp.swift`)
+- **Constants**: camelCase (`service`, `account`)
+- **File names**: PascalCase (`MiniMaxQuotaBarApp.swift`)
 
 ### Type Annotations
-
-- Prefer type inference for simple cases: `let count = 0`
-- Use explicit types for clarity in dictionaries/arrays:
-  ```swift
-  let query: [String: Any] = [...]
-  let items: [String] = []
-  ```
+- Prefer type inference: `let count = 0`
+- Use explicit types for clarity: `let query: [String: Any] = [...]`
 - Use `var` only when mutation is needed
 
 ### Access Control
-
-- Use `private` for internal implementation details
-- Use `internal` (default) for APIs used within the module
-- Use `@discardableResult` for functions that return values that may be intentionally ignored
+- Use `private` for internal details
+- Use `@discardableResult` for intentionally ignored return values
 
 ### Error Handling
-
-- Use Swift's native error handling with `throw`/`try`/`catch`
+- Use Swift's `throw`/`try`/`catch`
 - Define custom errors with `enum` conforming to `Error`:
-  ```swift
-  enum QuotaError: Error, LocalizedError {
-      case noApiKey
-      case apiError
-      case parseError
-      
-      var errorDescription: String? {
-          switch self {
-          case .noApiKey: return "API key not configured"
-          case .apiError: return "API request failed"
-          case .parseError: return "Failed to parse response"
-          }
-      }
-  }
-  ```
+```swift
+enum QuotaError: Error, LocalizedError {
+    case noApiKey
+    case apiError
+    var errorDescription: String? {
+        switch self {
+        case .noApiKey: return "API key not configured"
+        case .apiError: return "API request failed"
+        }
+    }
+}
+```
 - Use `guard` for early returns on invalid conditions
 
-### Documentation
-
-- Use triple-slash `///` for public API documentation
-- Document parameters, returns, and throws:
-  ```swift
-  /// Fetches the current quota from the MiniMax API.
-  ///
-  /// - Returns: QuotaResult containing quota information
-  /// - Throws: QuotaError if the request fails or response cannot be parsed
-  func getQuota() async throws -> QuotaResult
-  ```
-- Keep documentation concise but informative
-
 ### Concurrency
-
 - Use `async`/`await` for asynchronous operations
 - Use `Task` for launching async work
 - Update UI on main thread with `MainActor.run` or `@MainActor`
 
 ### UI (AppKit)
-
 - Use NSMenu for menu bar dropdowns
-- Configure button image/title with `imagePosition = .imageLeading`
 - Use SF Symbols for icons with custom tint colors
 - Set `isEnabled = false` for read-only menu items
 
 ### Security
-
 - Never log API keys or secrets
-- Use macOS Keychain for sensitive data storage
+- Use macOS Keychain for sensitive data
 - Never commit secrets to version control
 - Use `.gitignore` to exclude sensitive files
 
-### Testing
-
-- Currently no tests exist
-- When adding tests, place in a `Tests/` directory
-- Follow XCTest conventions
-- Test async functions with `XCTestExpectation`
+### Documentation
+- Use `///` for public API documentation
+- Document parameters, returns, and throws
 
 ## Common Tasks
 
 ### Adding a Menu Item
-
 1. Create `NSMenuItem` in `setupMenu()`:
-   ```swift
-   let item = NSMenuItem(title: "Label", action: #selector(methodName), keyEquivalent: "key")
-   item.target = self
-   menu.addItem(item)
-   ```
-
+```swift
+let item = NSMenuItem(title: "Label", action: #selector(methodName), keyEquivalent: "key")
+item.target = self
+menu.addItem(item)
+```
 2. Add `@objc` method in `AppDelegate`:
-   ```swift
-   @objc func methodName() {
-       // implementation
-   }
-   ```
+```swift
+@objc func methodName() {
+    // implementation
+}
+```
 
 ### Adding API Key Storage
-
-1. Use the `Keychain` enum for secure storage
-2. Call `setApiKey()` to save, `getApiKey()` to retrieve
-3. Never store keys in plain text files or environment variables in production
+- Use `Keychain` enum for secure storage
+- Call `Keychain.save(key)` to save, `Keychain.load()` to retrieve
+- The Keychain uses Touch ID (biometric) authentication
 
 ### Updating Status Icons
-
 - Located in `updateStatusItem()` method
 - Use SF Symbols with `createSymbolImage()` helper
-- Apply tint colors for different states (green/yellow/red)
+- Apply tint colors: green (0-75%), yellow (75-90%), red (90-100%)
 
 ## Version Info
-
 - **Swift**: 5.9
 - **macOS Target**: 13.0+
 - **Xcode**: Use XcodeGen for project generation

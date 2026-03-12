@@ -71,7 +71,6 @@ enum Keychain {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 }
-import AppKit
 
 // MARK: - App Entry Point
 
@@ -224,7 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 await MainActor.run {
-                    statusItem.button?.title = "❌"
+                    updateStatusItemError()
                 }
             }
         }
@@ -236,16 +235,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let used = quota.total - quota.remaining
         let percent = Int((Double(used) / Double(quota.total)) * 100)
         
-        // Determine status emoji based on usage percentage
-        var emoji = "🟢"  // Healthy (0-75%)
+        // Determine status symbol based on usage percentage
+        let symbolName: String
+        let tintColor: NSColor
         if percent > 90 {
-            emoji = "🔴"  // Critical (90-100%)
+            symbolName = "gauge.with.needle"
+            tintColor = NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
         } else if percent > 75 {
-            emoji = "🟡"  // Warning (75-90%)
+            symbolName = "gauge.high"
+            tintColor = NSColor(red: 1.0, green: 0.58, blue: 0.0, alpha: 1.0)
+        } else {
+            symbolName = "gauge.medium"
+            tintColor = NSColor(red: 0.20, green: 0.78, blue: 0.35, alpha: 1.0)
         }
         
-        // Update menu bar button
-        statusItem.button?.title = "\(emoji) \(percent)%"
+        if let image = createSymbolImage(named: symbolName, tintColor: tintColor) {
+            statusItem.button?.image = image
+        }
+        statusItem.button?.title = " \(percent)%"
+        statusItem.button?.imagePosition = .imageLeading
         
         // Update dropdown menu with details
         if let menu = statusItem.menu {
@@ -277,6 +285,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             menu.insertItem(NSMenuItem.separator(), at: 5)
         }
+    }
+    
+    /// Updates status bar button to show error state
+    private func updateStatusItemError() {
+        if let image = createSymbolImage(named: "exclamationmark.triangle", tintColor: NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)) {
+            statusItem.button?.image = image
+        }
+        statusItem.button?.title = " Error"
+        statusItem.button?.imagePosition = .imageLeading
+    }
+    
+    /// Creates a colored SF Symbol image for the status bar
+    /// - Parameters:
+    ///   - name: SF Symbol name
+    ///   - tintColor: Color to apply to the symbol
+    /// - Returns: Colored NSImage or nil if creation fails
+    private func createSymbolImage(named name: String, tintColor: NSColor) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: "Quota")?.withSymbolConfiguration(config) else {
+            return nil
+        }
+        
+        let coloredImage = image.copy() as! NSImage
+        coloredImage.lockFocus()
+        tintColor.set()
+        let imageRect = NSRect(origin: .zero, size: coloredImage.size)
+        imageRect.fill(using: .sourceAtop)
+        coloredImage.unlockFocus()
+        
+        return coloredImage
     }
 }
 

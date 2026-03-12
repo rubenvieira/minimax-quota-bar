@@ -102,6 +102,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Refresh interval in seconds (5 minutes)
     private let refreshInterval: TimeInterval = 300
     
+    /// GitHub repository for update checks
+    private let githubRepo = "rubenvieira/minimax-quota-bar"
+    
     // MARK: - NSApplicationDelegate
     
     /// Called when the app has finished launching.
@@ -111,6 +114,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenu()
         fetchQuota()
         startAutoRefresh()
+        checkForUpdates()
+    }
+    
+    /// Checks GitHub for a new release and prompts user if available
+    private func checkForUpdates() {
+        guard let url = URL(string: "https://api.github.com/repos/\(githubRepo)/releases/latest") else { return }
+        
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        
+        Task {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let tagName = json["tag_name"] as? String else { return }
+                
+                let latestVersion = tagName.replacingOccurrences(of: "v", with: "")
+                let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+                
+                if self.isNewerVersion(latestVersion, than: currentVersion) {
+                    await MainActor.run {
+                        self.showUpdateAlert(newVersion: latestVersion, releaseInfo: json)
+                    }
+                }
+            } catch {
+                // Silently fail - update check is non-critical
+            }
+        }
+    }
+    
+    /// Compares two version strings
+    private func isNewerVersion(_ new: String, than current: String) -> Bool {
+        let newParts = new.split(separator: ".").compactMap { Int($0) }
+        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        
+        for i in 0..<max(newParts.count, currentParts.count) {
+            let newVal = i < newParts.count ? newParts[i] : 0
+            let currentVal = i < currentParts.count ? currentParts[i] : 0
+            if newVal > currentVal { return true }
+            if newVal < currentVal { return false }
+        }
+        return false
+    }
+    
+    /// Shows alert prompting user to update
+    private func showUpdateAlert(newVersion: String, releaseInfo: [String: Any]) {
+        let alert = NSAlert()
+        alert.messageText = "Update Available"
+        alert.informativeText = "A new version (\(newVersion)) is available. Would you like to download it?"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Download")
+        alert.addButton(withTitle: "Later")
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            if let urlString = releaseInfo["html_url"] as? String,
+               let url = URL(string: urlString) {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
     
     // MARK: - Setup Methods

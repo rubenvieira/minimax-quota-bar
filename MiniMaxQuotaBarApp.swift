@@ -161,17 +161,61 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     /// Shows alert prompting user to update
     private func showUpdateAlert(newVersion: String, releaseInfo: [String: Any]) {
+        guard let assets = releaseInfo["assets"] as? [[String: Any]],
+              let downloadURL = (assets.first { ($0["name"] as? String)?.contains(".zip") == true })?["browser_download_url"] as? String else {
+            return
+        }
+        
         let alert = NSAlert()
         alert.messageText = "Update Available"
-        alert.informativeText = "A new version (\(newVersion)) is available. Would you like to download it?"
+        alert.informativeText = "A new version (\(newVersion)) is available. Would you like to download and install it?"
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Download")
+        alert.addButton(withTitle: "Download & Install")
         alert.addButton(withTitle: "Later")
         
         if alert.runModal() == .alertFirstButtonReturn {
-            if let urlString = releaseInfo["html_url"] as? String,
-               let url = URL(string: urlString) {
-                NSWorkspace.shared.open(url)
+            downloadAndInstallUpdate(from: downloadURL)
+        }
+    }
+    
+    /// Downloads and installs the update
+    private func downloadAndInstallUpdate(from urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        
+        statusItem.button?.title = "⬇️ Updating..."
+        
+        Task {
+            do {
+                let (tempURL, response) = try await URLSession.shared.download(for: URLRequest(url: url))
+                
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    await MainActor.run { self.statusItem.button?.title = "❌" }
+                    return
+                }
+                
+                let zipPath = FileManager.default.temporaryDirectory.appendingPathComponent("MiniMaxQuotaBar.zip")
+                try? FileManager.default.removeItem(at: zipPath)
+                try FileManager.default.moveItem(at: tempURL, to: zipPath)
+                
+                let extractPath = FileManager.default.temporaryDirectory.appendingPathComponent("MiniMaxQuotaBar")
+                try? FileManager.default.removeItem(at: extractPath)
+                
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                task.arguments = ["-o", zipPath.path, "-d", extractPath.path]
+                try task.run()
+                task.waitUntilExit()
+                
+                let appPath = extractPath.appendingPathComponent("MiniMaxQuotaBar.app")
+                
+                if FileManager.default.fileExists(atPath: appPath.path) {
+                    await MainActor.run {
+                        NSWorkspace.shared.open(appPath)
+                        NSApplication.shared.terminate(nil)
+                    }
+                }
+            } catch {
+                await MainActor.run { self.statusItem.button?.title = "❌" }
             }
         }
     }

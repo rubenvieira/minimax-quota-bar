@@ -22,7 +22,7 @@ A macOS menu bar app that displays your MiniMax API quota usage in real-time.
 
 ### From Release
 
-1. Download the latest `.app` from [Releases](https://github.com/yourusername/minimax-quota-bar/releases)
+1. Download the latest `.app` from [Releases](https://github.com/rubenvieira/minimax-quota-bar/releases)
 2. Move to `/Applications/`
 3. Run the app
 
@@ -30,7 +30,7 @@ A macOS menu bar app that displays your MiniMax API quota usage in real-time.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/minimax-quota-bar.git
+git clone https://github.com/rubenvieira/minimax-quota-bar.git
 cd minimax-quota-bar
 
 # Generate Xcode project
@@ -60,8 +60,9 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 ## Usage
 
 - Click the percentage in the menu bar to see details
-- **Refresh** - Manually refresh quota data
-- **Quit** - Exit the app
+- **Refresh** - Manually refresh quota data (⌘R)
+- **Settings** - Configure API key (⌘,)
+- **Quit** - Exit the app (⌘Q)
 
 ## Configuration
 
@@ -90,12 +91,12 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ```
 MiniMaxQuotaBar/
-├── Sources/
-│   └── MiniMaxQuotaBarApp.swift   # Main app code
-├── Assets.xcassets/                # App icons
-├── project.yml                     # XcodeGen configuration
-├── README.md                       # This file
-└── LICENSE                        # MIT License
+├── MiniMaxQuotaBarApp.swift   # Main app code
+├── Assets.xcassets/            # App icons
+├── project.yml                 # XcodeGen configuration
+├── MiniMaxQuotaBar.xcodeproj/ # Generated Xcode project
+├── README.md                   # This file
+└── LICENSE                    # MIT License
 ```
 
 ## Contributing

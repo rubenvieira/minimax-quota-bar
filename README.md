@@ -45,15 +45,8 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ## Setup
 
-1. **Set your API key**:
-   ```bash
-   echo "your-minimax-api-key" > ~/.config/opencode/minimax-key.txt
-   ```
-   
-   Or set the `MINIMAX_API_KEY` environment variable.
-
-2. **Launch the app** - It will appear in your menu bar
-
+1. **Launch the app** - It will appear in your menu bar
+2. **Configure your API key** - Click the menu bar item and go to Settings (⌘,) to enter your MiniMax API key
 3. **(Optional) Add to Login Items**:
    - System Settings → General → Login Items
    - Add "MiniMaxQuotaBar"
@@ -70,10 +63,7 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ## Configuration
 
-| Method | Description |
-|--------|-------------|
-| `~/.config/opencode/minimax-key.txt` | API key file (recommended) |
-| `MINIMAX_API_KEY` env var | Environment variable |
+The API key is configured directly in the app via **Settings** (⌘,). Your key is stored securely in macOS Keychain.
 
 ## Status Icons
 
@@ -121,4 +111,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 - [MiniMax API](https://platform.minimaxi.com) - For providing the quota API
-- [OpenCode](https://opencode.ai) - Inspiration for this project

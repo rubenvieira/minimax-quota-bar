@@ -13,7 +13,7 @@ import Security
 // MARK: - Keychain Helper
 
 enum Keychain {
-    static let service = "com.opencode.minimax-quota-bar"
+    static let service = "com.minimax.quota-bar"
     static let account = "minimax-api-key"
     
     static func save(_ key: String) -> Bool {
@@ -618,6 +618,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     @objc func quit() {
         NSApplication.shared.terminate(nil)
     }
+
+    /// Dummy action for informational menu items (prevents macOS from greying them out)
+    @objc private func noAction() {}
     
     // MARK: - Quota Management
     
@@ -671,64 +674,84 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         statusItem.button?.title = " \(displayPercent)%"
         statusItem.button?.imagePosition = .imageLeading
 
-        // Update dropdown menu with details
-        if let menu = statusItem.menu {
-            // Remove old quota items
-            menu.items.removeAll { item in
-                item.title.hasPrefix("5h") ||
-                item.title.hasPrefix("Weekly") ||
-                item.title.hasPrefix("  Used:") ||
-                item.title.hasPrefix("  Resets:")
-            }
+        // Build a new menu with quota info
+        let menu = NSMenu()
 
-            // 5h interval header
-            let intervalHeader = NSMenuItem(title: "5h Interval", action: nil, keyEquivalent: "")
-            intervalHeader.isEnabled = false
-            menu.insertItem(intervalHeader, at: 2)
+        // Header
+        let titleItem = NSMenuItem()
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 13)
+        ]
+        titleItem.attributedTitle = NSAttributedString(string: "MiniMax Quota", attributes: titleAttrs)
+        titleItem.action = #selector(noAction)
+        titleItem.target = self
+        menu.addItem(titleItem)
 
-            // Add 5h usage and remaining
-            let intervalUsageItem = NSMenuItem(title: "  Used: \(intervalUsed) / \(quota.total) (\(intervalPercent)%)", action: nil, keyEquivalent: "")
-            intervalUsageItem.isEnabled = false
-            menu.insertItem(intervalUsageItem, at: 3)
+        menu.addItem(NSMenuItem.separator())
 
-            // Add 5h time remaining
-            let hours = quota.minutesRemaining / 60
-            let minutes = quota.minutesRemaining % 60
-            let intervalTimeString = hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
-            let intervalTimeItem = NSMenuItem(title: "  Resets: in \(intervalTimeString)", action: nil, keyEquivalent: "")
-            intervalTimeItem.isEnabled = false
-            menu.insertItem(intervalTimeItem, at: 4)
+        // 5h interval section
+        let intervalHeader = NSMenuItem(title: "5h Interval", action: #selector(noAction), keyEquivalent: "")
+        intervalHeader.target = self
+        menu.addItem(intervalHeader)
 
-            menu.insertItem(NSMenuItem.separator(), at: 5)
+        let hours = quota.minutesRemaining / 60
+        let minutes = quota.minutesRemaining % 60
+        let intervalTimeString = hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
+        let intervalUsedItem = NSMenuItem(title: "  • Used: \(intervalUsed) / \(quota.total) (\(intervalPercent)%)", action: #selector(noAction), keyEquivalent: "")
+        intervalUsedItem.target = self
+        menu.addItem(intervalUsedItem)
 
-            // Weekly header
-            let weeklyHeader = NSMenuItem(title: "Weekly", action: nil, keyEquivalent: "")
-            weeklyHeader.isEnabled = false
-            menu.insertItem(weeklyHeader, at: 6)
+        let intervalTimeItem = NSMenuItem(title: "  • Resets: in \(intervalTimeString)", action: #selector(noAction), keyEquivalent: "")
+        intervalTimeItem.target = self
+        menu.addItem(intervalTimeItem)
 
-            // Add Weekly usage and remaining
-            let weeklyUsageItem = NSMenuItem(title: "  Used: \(weeklyUsed) / \(quota.weeklyTotal) (\(weeklyPercent)%)", action: nil, keyEquivalent: "")
-            weeklyUsageItem.isEnabled = false
-            menu.insertItem(weeklyUsageItem, at: 7)
+        menu.addItem(NSMenuItem.separator())
 
-            // Add Weekly time remaining
-            let weeklyDays = quota.weeklyMinutesRemaining / (24 * 60)
-            let weeklyRemainingMinutes = quota.weeklyMinutesRemaining % (24 * 60)
-            let weeklyHours = weeklyRemainingMinutes / 60
-            var weeklyTimeString: String
-            if weeklyDays > 0 {
-                weeklyTimeString = "\(weeklyDays) day \(weeklyHours) hr"
-            } else if weeklyHours > 0 {
-                weeklyTimeString = "\(weeklyHours) hr \(quota.weeklyMinutesRemaining % 60) min"
-            } else {
-                weeklyTimeString = "\(quota.weeklyMinutesRemaining) min"
-            }
-            let weeklyTimeItem = NSMenuItem(title: "  Resets: in \(weeklyTimeString)", action: nil, keyEquivalent: "")
-            weeklyTimeItem.isEnabled = false
-            menu.insertItem(weeklyTimeItem, at: 8)
+        // Weekly section
+        let weeklyHeader = NSMenuItem(title: "Weekly", action: #selector(noAction), keyEquivalent: "")
+        weeklyHeader.target = self
+        menu.addItem(weeklyHeader)
 
-            menu.insertItem(NSMenuItem.separator(), at: 9)
+        let weeklyDays = quota.weeklyMinutesRemaining / (24 * 60)
+        let weeklyRemainingMinutes = quota.weeklyMinutesRemaining % (24 * 60)
+        let weeklyHours = weeklyRemainingMinutes / 60
+        var weeklyTimeString: String
+        if weeklyDays > 0 {
+            weeklyTimeString = "\(weeklyDays) day \(weeklyHours) hr"
+        } else if weeklyHours > 0 {
+            weeklyTimeString = "\(weeklyHours) hr \(quota.weeklyMinutesRemaining % 60) min"
+        } else {
+            weeklyTimeString = "\(quota.weeklyMinutesRemaining) min"
         }
+        let weeklyUsedItem = NSMenuItem(title: "  • Used: \(weeklyUsed) / \(quota.weeklyTotal) (\(weeklyPercent)%)", action: #selector(noAction), keyEquivalent: "")
+        weeklyUsedItem.target = self
+        menu.addItem(weeklyUsedItem)
+
+        let weeklyTimeItem = NSMenuItem(title: "  • Resets: in \(weeklyTimeString)", action: #selector(noAction), keyEquivalent: "")
+        weeklyTimeItem.target = self
+        menu.addItem(weeklyTimeItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Refresh option
+        let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+
+        // Settings option
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Quit option
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        // Assign the new menu
+        statusItem.menu = menu
     }
     
     /// Updates status bar button to show error state

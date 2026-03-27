@@ -8,11 +8,12 @@ A macOS menu bar app that displays your MiniMax API quota usage in real-time.
 
 ## Features
 
-- 📊 **Real-time quota monitoring** - Displays your MiniMax API usage percentage in the menu bar
+- 📊 **Real-time quota monitoring** - Displays your MiniMax API usage percentage in the menu bar (shows the more critical quota)
+- 📅 **Dual quota tracking** - Monitors both 5-hour interval and weekly quotas
 - 🔄 **Auto-refresh** - Automatically updates every 5 minutes
 - 🎨 **Status indicators** - Color-coded status icons (green/yellow/red)
 - 🍎 **Native macOS** - Runs as a menu bar app (no dock icon)
-- 🔐 **Secure** - API key stored locally, never transmitted anywhere except to MiniMax
+- 🔐 **Secure** - API key stored securely in macOS Keychain
 
 ## Screenshot
 
@@ -59,7 +60,10 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ## Usage
 
-- Click the percentage in the menu bar to see details
+- Click the percentage in the menu bar to see detailed quota information
+- Menu dropdown displays:
+  - **5h Interval** - Current usage, total, and time until reset
+  - **Weekly** - Current usage, total, and time until reset
 - **Refresh** - Manually refresh quota data (⌘R)
 - **Settings** - Configure API key (⌘,)
 - **Quit** - Exit the app (⌘Q)
@@ -72,6 +76,8 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 | `MINIMAX_API_KEY` env var | Environment variable |
 
 ## Status Icons
+
+The menu bar shows the percentage based on whichever quota (5h or weekly) is more critical.
 
 | Usage | Color | SF Symbol |
 |-------|-------|-----------|

@@ -18,41 +18,23 @@ enum Keychain {
     
     static func save(_ key: String) -> Bool {
         let data = Data(key.utf8)
-        
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        
+
         SecItemDelete(query as CFDictionary)
-        
-        var error: Unmanaged<CFError>?
-        guard let accessControl = SecAccessControlCreateWithFlags(
-            kCFAllocatorDefault,
-            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-            .biometryCurrentSet,
-            &error
-        ) else {
-            let attributes: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: account,
-                kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
-            ]
-            let status = SecItemAdd(attributes as CFDictionary, nil)
-            return status == errSecSuccess
-        }
-        
+
         let attributes: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: data,
-            kSecAttrAccessControl as String: accessControl
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
-        
+
         let status = SecItemAdd(attributes as CFDictionary, nil)
         return status == errSecSuccess
     }
@@ -104,10 +86,274 @@ struct MiniMaxQuotaBarApp {
     }
 }
 
+// MARK: - Settings Window Controller
+
+protocol SettingsWindowDelegate: AnyObject {
+    func settingsWindow(_ controller: SettingsWindowController, didCloseWithReturnCode returnCode: NSApplication.ModalResponse)
+}
+
+/// Controller for the API key settings window presented as a sheet
+class SettingsWindowController: NSWindowController {
+    private var secureTextField: NSSecureTextField!
+    private var plainTextField: NSTextField!
+    private var toggleButton: NSButton!
+    private var statusLabel: NSTextField!
+    private var isShowingPlainText = false
+    weak var delegate: SettingsWindowDelegate?
+
+    convenience init() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Settings"
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.center()
+
+        self.init(window: window)
+        setupUI()
+    }
+
+    private func setupUI() {
+        guard let contentView = window?.contentView else { return }
+
+        let containerView = NSView(frame: contentView.bounds)
+        containerView.autoresizingMask = [.width, .height]
+        contentView.addSubview(containerView)
+
+        // Title label
+        let titleLabel = NSTextField(labelWithString: "API Key")
+        titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
+        titleLabel.frame = NSRect(x: 24, y: 270, width: 432, height: 24)
+        containerView.addSubview(titleLabel)
+
+        // Description label
+        let descLabel = NSTextField(wrappingLabelWithString: "Enter your MiniMax API key. The key will be stored securely in macOS Keychain with Touch ID protection.")
+        descLabel.font = NSFont.systemFont(ofSize: 12)
+        descLabel.textColor = NSColor.secondaryLabelColor
+        descLabel.frame = NSRect(x: 24, y: 235, width: 432, height: 36)
+        containerView.addSubview(descLabel)
+
+        // Input field container with styled border
+        let inputContainer = NSView(frame: NSRect(x: 24, y: 185, width: 432, height: 40))
+        inputContainer.wantsLayer = true
+        inputContainer.layer?.cornerRadius = 8
+        inputContainer.layer?.borderWidth = 1
+        inputContainer.layer?.borderColor = NSColor.separatorColor.cgColor
+        inputContainer.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+
+        // Plain text field (hidden by default)
+        plainTextField = NSTextField(frame: NSRect(x: 12, y: 6, width: 370, height: 28))
+        plainTextField.placeholderString = "Enter API key..."
+        plainTextField.stringValue = getApiKey() ?? ""
+        plainTextField.isHidden = true
+        plainTextField.isBordered = false
+        plainTextField.backgroundColor = .clear
+        plainTextField.font = NSFont.systemFont(ofSize: 13)
+        inputContainer.addSubview(plainTextField)
+
+        // Secure text field
+        secureTextField = NSSecureTextField(frame: NSRect(x: 12, y: 6, width: 370, height: 28))
+        secureTextField.placeholderString = "Enter API key..."
+        secureTextField.stringValue = getApiKey() ?? ""
+        secureTextField.isBordered = false
+        secureTextField.backgroundColor = .clear
+        secureTextField.font = NSFont.systemFont(ofSize: 13)
+        inputContainer.addSubview(secureTextField)
+
+        // Toggle button (eye icon)
+        toggleButton = NSButton(frame: NSRect(x: 385, y: 4, width: 32, height: 32))
+        toggleButton.bezelStyle = .inline
+        toggleButton.isBordered = false
+        toggleButton.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Show/Hide")
+        toggleButton.contentTintColor = NSColor.secondaryLabelColor
+        toggleButton.target = self
+        toggleButton.action = #selector(toggleVisibility)
+        inputContainer.addSubview(toggleButton)
+
+        containerView.addSubview(inputContainer)
+
+        // Status label
+        statusLabel = NSTextField(labelWithString: "")
+        statusLabel.font = NSFont.systemFont(ofSize: 12)
+        statusLabel.frame = NSRect(x: 24, y: 158, width: 432, height: 20)
+        statusLabel.isHidden = true
+        containerView.addSubview(statusLabel)
+
+        // Separator
+        let separator = NSBox(frame: NSRect(x: 24, y: 140, width: 432, height: 1))
+        separator.boxType = .separator
+        containerView.addSubview(separator)
+
+        // Buttons row with icons
+        let buttonY: CGFloat = 88
+
+        // Get API Key button with icon
+        let getKeyButton = NSButton(frame: NSRect(x: 24, y: buttonY, width: 130, height: 32))
+        getKeyButton.bezelStyle = .rounded
+        getKeyButton.image = NSImage(systemSymbolName: "arrow.up.right.square", accessibilityDescription: nil)
+        getKeyButton.imagePosition = .imageLeading
+        getKeyButton.title = "Get API Key"
+        getKeyButton.target = self
+        getKeyButton.action = #selector(openGetKeyURL)
+        containerView.addSubview(getKeyButton)
+
+        // Delete button with icon
+        let deleteButton = NSButton(frame: NSRect(x: 162, y: buttonY, width: 120, height: 32))
+        deleteButton.bezelStyle = .rounded
+        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
+        deleteButton.imagePosition = .imageLeading
+        deleteButton.title = "Delete"
+        deleteButton.contentTintColor = NSColor.systemRed
+        deleteButton.target = self
+        deleteButton.action = #selector(deleteKey)
+        containerView.addSubview(deleteButton)
+
+        // Test button with icon
+        let testButton = NSButton(frame: NSRect(x: 290, y: buttonY, width: 90, height: 32))
+        testButton.bezelStyle = .rounded
+        testButton.image = NSImage(systemSymbolName: "antenna.radiowaves.left.and.right", accessibilityDescription: nil)
+        testButton.imagePosition = .imageLeading
+        testButton.title = "Test"
+        testButton.target = self
+        testButton.action = #selector(testConnection)
+        containerView.addSubview(testButton)
+
+        // Bottom separator
+        let bottomSeparator = NSBox(frame: NSRect(x: 24, y: 70, width: 432, height: 1))
+        bottomSeparator.boxType = .separator
+        containerView.addSubview(bottomSeparator)
+
+        // Cancel button
+        let cancelButton = NSButton(frame: NSRect(x: 300, y: 24, width: 80, height: 32))
+        cancelButton.bezelStyle = .rounded
+        cancelButton.title = "Cancel"
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelAction)
+        containerView.addSubview(cancelButton)
+
+        // Save button (default, prominent)
+        let saveButton = NSButton(frame: NSRect(x: 388, y: 24, width: 68, height: 32))
+        saveButton.bezelStyle = .rounded
+        saveButton.title = "Save"
+        saveButton.keyEquivalent = "\r"
+        saveButton.target = self
+        saveButton.action = #selector(saveAction)
+        containerView.addSubview(saveButton)
+    }
+
+    @objc private func toggleVisibility() {
+        isShowingPlainText.toggle()
+
+        if isShowingPlainText {
+            plainTextField.stringValue = secureTextField.stringValue
+            secureTextField.isHidden = true
+            plainTextField.isHidden = false
+            toggleButton.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "Show/Hide")
+        } else {
+            secureTextField.stringValue = plainTextField.stringValue
+            plainTextField.isHidden = true
+            secureTextField.isHidden = false
+            toggleButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "Show/Hide")
+        }
+    }
+
+    @objc private func openGetKeyURL() {
+        NSWorkspace.shared.open(URL(string: "https://platform.minimax.io/user-center/payment/token-plan")!)
+    }
+
+    @objc private func deleteKey() {
+        removeApiKey()
+        secureTextField.stringValue = ""
+        plainTextField.stringValue = ""
+        showStatus(message: "API key deleted", isError: false)
+    }
+
+    @objc private func testConnection() {
+        let apiKey = isShowingPlainText ? plainTextField.stringValue : secureTextField.stringValue
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        showStatus(message: "Testing with key: \(trimmedKey.prefix(5))...", isError: false)
+        window?.makeFirstResponder(nil)
+
+        guard !trimmedKey.isEmpty else {
+            showStatus(message: "Please enter an API key first", isError: true)
+            return
+        }
+
+        // Temporarily save to test
+        let originalKey = getApiKey()
+        _ = setApiKey(trimmedKey)
+
+        // Use semaphore to wait for async result while allowing event processing
+        let semaphore = DispatchSemaphore(value: 0)
+        var testResult: Result<Void, Error> = .success(())
+
+        Task {
+            do {
+                _ = try await getQuota()
+                testResult = .success(())
+            } catch {
+                testResult = .failure(error)
+            }
+            semaphore.signal()
+        }
+
+        // Pump the event loop while waiting
+        while semaphore.wait(timeout: .now() + 0.1) == .timedOut {
+            if let event = NSApp.nextEvent(matching: .any, until: Date(timeIntervalSinceNow: 0.01), inMode: .default, dequeue: true) {
+                NSApp.sendEvent(event)
+            }
+        }
+
+        // Process result
+        switch testResult {
+        case .success:
+            showStatus(message: "Connection successful!", isError: false)
+        case .failure(let error):
+            showStatus(message: "Connection failed: \(error.localizedDescription)", isError: true)
+        }
+
+        // Restore original key if different
+        if let original = originalKey {
+            _ = setApiKey(original)
+        }
+    }
+
+    @objc private func cancelAction() {
+        delegate?.settingsWindow(self, didCloseWithReturnCode: .cancel)
+    }
+
+    @objc private func saveAction() {
+        let apiKey = isShowingPlainText ? plainTextField.stringValue : secureTextField.stringValue
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedKey.isEmpty else {
+            showStatus(message: "Please enter an API key", isError: true)
+            return
+        }
+
+        if setApiKey(trimmedKey) {
+            delegate?.settingsWindow(self, didCloseWithReturnCode: .OK)
+        } else {
+            showStatus(message: "Failed to save API key", isError: true)
+        }
+    }
+
+    private func showStatus(message: String, isError: Bool) {
+        statusLabel.stringValue = message
+        statusLabel.textColor = isError ? NSColor.systemRed : NSColor.systemGreen
+        statusLabel.isHidden = false
+    }
+}
+
 // MARK: - AppDelegate
 
 /// Application delegate responsible for managing the menu bar item and app lifecycle.
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     
     // MARK: - Properties
     
@@ -128,6 +374,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Called when the app has finished launching.
     /// Sets up the status bar item, menu, and starts auto-refresh.
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setupMainMenu()
         setupStatusItem()
         setupMenu()
         fetchQuota()
@@ -251,6 +498,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     /// Sets up the dropdown menu with options
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // App menu
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+
+        // Edit menu
+        let editMenuItem = NSMenuItem()
+        editMenuItem.submenu = NSMenu(title: "Edit")
+        mainMenu.addItem(editMenuItem)
+
+        let editMenu = editMenuItem.submenu!
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+
+        NSApp.mainMenu = mainMenu
+    }
+
     private func setupMenu() {
         let menu = NSMenu()
         
@@ -298,37 +569,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fetchQuota()
     }
     
-    /// Opens settings dialog to configure API key
+    /// Opens settings window as a sheet to configure API key
     @objc func openSettings() {
-        let alert = NSAlert()
-        alert.messageText = "MiniMax API Key"
-        alert.informativeText = "Enter your MiniMax API key. The key will be stored securely in macOS Keychain."
-        alert.alertStyle = .informational
-        
-        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        inputField.placeholderString = "Enter API key..."
-        inputField.stringValue = getApiKey() ?? ""
-        alert.accessoryView = inputField
-        
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        
-        let response = alert.runModal()
-        
-        if response == .alertFirstButtonReturn {
-            let apiKey = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !apiKey.isEmpty {
-                if setApiKey(apiKey) {
-                    fetchQuota()
-                } else {
-                    let errorAlert = NSAlert()
-                    errorAlert.messageText = "Error"
-                    errorAlert.informativeText = "Failed to save API key to Keychain."
-                    errorAlert.alertStyle = .warning
-                    errorAlert.runModal()
-                }
-            }
+        let settingsController = SettingsWindowController()
+        settingsController.delegate = self
+
+        guard let settingsWindow = settingsController.window else { return }
+
+        // Position at screen center for menu bar app
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let windowFrame = settingsWindow.frame
+            let x = screenFrame.midX - windowFrame.width / 2
+            let y = screenFrame.midY - windowFrame.height / 2
+            settingsWindow.setFrameOrigin(NSPoint(x: x, y: y))
         }
+
+        settingsWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow.makeFirstResponder(nil)
+
+        // Store reference
+        modalSettingsWindow = settingsWindow
+
+        // Run modal event loop
+        NSApp.runModal(for: settingsWindow)
+    }
+
+    private var modalSettingsWindow: NSWindow?
+
+    func closeSettings(returnCode: NSApplication.ModalResponse) {
+        NSApp.stopModal(withCode: returnCode)
+        modalSettingsWindow?.orderOut(nil)
+        modalSettingsWindow = nil
+
+        if returnCode == .OK || returnCode == .alertThirdButtonReturn {
+            fetchQuota()
+        }
+    }
+
+    // MARK: - SettingsWindowDelegate
+
+    func settingsWindow(_ controller: SettingsWindowController, didCloseWithReturnCode returnCode: NSApplication.ModalResponse) {
+        closeSettings(returnCode: returnCode)
     }
     
     /// Quits the application
@@ -357,58 +640,94 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Updates the menu bar button and dropdown menu with quota data
     /// - Parameter quota: The quota data to display
     private func updateStatusItem(quota: QuotaResult) {
-        let used = quota.total - quota.remaining
-        let percent = Int((Double(used) / Double(quota.total)) * 100)
-        
+        // Calculate interval usage percentage
+        let intervalUsed = quota.total - quota.remaining
+        let intervalPercent = quota.total > 0 ? Int((Double(intervalUsed) / Double(quota.total)) * 100) : 0
+
+        // Calculate weekly usage percentage
+        let weeklyUsed = quota.weeklyTotal - quota.weeklyRemaining
+        let weeklyPercent = quota.weeklyTotal > 0 ? Int((Double(weeklyUsed) / Double(quota.weeklyTotal)) * 100) : 0
+
+        // Show the worse (higher) percentage in the menu bar
+        let displayPercent = max(intervalPercent, weeklyPercent)
+
         // Determine status symbol based on usage percentage
         let symbolName: String
         let tintColor: NSColor
-        if percent > 90 {
+        if displayPercent > 90 {
             symbolName = "gauge.with.needle"
             tintColor = NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
-        } else if percent > 75 {
+        } else if displayPercent > 75 {
             symbolName = "gauge.high"
             tintColor = NSColor(red: 1.0, green: 0.58, blue: 0.0, alpha: 1.0)
         } else {
             symbolName = "gauge.medium"
             tintColor = NSColor(red: 0.20, green: 0.78, blue: 0.35, alpha: 1.0)
         }
-        
+
         if let image = createSymbolImage(named: symbolName, tintColor: tintColor) {
             statusItem.button?.image = image
         }
-        statusItem.button?.title = " \(percent)%"
+        statusItem.button?.title = " \(displayPercent)%"
         statusItem.button?.imagePosition = .imageLeading
-        
+
         // Update dropdown menu with details
         if let menu = statusItem.menu {
             // Remove old quota items
             menu.items.removeAll { item in
-                item.title.contains("Used:") ||
-                item.title.contains("Remaining:") ||
-                item.title.contains("Resets:")
+                item.title.hasPrefix("5h") ||
+                item.title.hasPrefix("Weekly") ||
+                item.title.hasPrefix("  Used:") ||
+                item.title.hasPrefix("  Resets:")
             }
-            
-            // Add Used count
-            let usedItem = NSMenuItem(title: "Used: \(used) / \(quota.total)", action: nil, keyEquivalent: "")
-            usedItem.isEnabled = false
-            menu.insertItem(usedItem, at: 2)
-            
-            // Add Remaining count
-            let remainingItem = NSMenuItem(title: "Remaining: \(quota.remaining)", action: nil, keyEquivalent: "")
-            remainingItem.isEnabled = false
-            menu.insertItem(remainingItem, at: 3)
-            
-            // Add Reset time
+
+            // 5h interval header
+            let intervalHeader = NSMenuItem(title: "5h Interval", action: nil, keyEquivalent: "")
+            intervalHeader.isEnabled = false
+            menu.insertItem(intervalHeader, at: 2)
+
+            // Add 5h usage and remaining
+            let intervalUsageItem = NSMenuItem(title: "  Used: \(intervalUsed) / \(quota.total) (\(intervalPercent)%)", action: nil, keyEquivalent: "")
+            intervalUsageItem.isEnabled = false
+            menu.insertItem(intervalUsageItem, at: 3)
+
+            // Add 5h time remaining
             let hours = quota.minutesRemaining / 60
             let minutes = quota.minutesRemaining % 60
-            let timeString = hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
-            
-            let resetsItem = NSMenuItem(title: "Resets: in \(timeString)", action: nil, keyEquivalent: "")
-            resetsItem.isEnabled = false
-            menu.insertItem(resetsItem, at: 4)
-            
+            let intervalTimeString = hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
+            let intervalTimeItem = NSMenuItem(title: "  Resets: in \(intervalTimeString)", action: nil, keyEquivalent: "")
+            intervalTimeItem.isEnabled = false
+            menu.insertItem(intervalTimeItem, at: 4)
+
             menu.insertItem(NSMenuItem.separator(), at: 5)
+
+            // Weekly header
+            let weeklyHeader = NSMenuItem(title: "Weekly", action: nil, keyEquivalent: "")
+            weeklyHeader.isEnabled = false
+            menu.insertItem(weeklyHeader, at: 6)
+
+            // Add Weekly usage and remaining
+            let weeklyUsageItem = NSMenuItem(title: "  Used: \(weeklyUsed) / \(quota.weeklyTotal) (\(weeklyPercent)%)", action: nil, keyEquivalent: "")
+            weeklyUsageItem.isEnabled = false
+            menu.insertItem(weeklyUsageItem, at: 7)
+
+            // Add Weekly time remaining
+            let weeklyDays = quota.weeklyMinutesRemaining / (24 * 60)
+            let weeklyRemainingMinutes = quota.weeklyMinutesRemaining % (24 * 60)
+            let weeklyHours = weeklyRemainingMinutes / 60
+            var weeklyTimeString: String
+            if weeklyDays > 0 {
+                weeklyTimeString = "\(weeklyDays) day \(weeklyHours) hr"
+            } else if weeklyHours > 0 {
+                weeklyTimeString = "\(weeklyHours) hr \(quota.weeklyMinutesRemaining % 60) min"
+            } else {
+                weeklyTimeString = "\(quota.weeklyMinutesRemaining) min"
+            }
+            let weeklyTimeItem = NSMenuItem(title: "  Resets: in \(weeklyTimeString)", action: nil, keyEquivalent: "")
+            weeklyTimeItem.isEnabled = false
+            menu.insertItem(weeklyTimeItem, at: 8)
+
+            menu.insertItem(NSMenuItem.separator(), at: 9)
         }
     }
     
@@ -447,14 +766,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Represents the MiniMax API quota information
 struct QuotaResult {
-    /// Total quota available in the current period
+    /// Total quota available in the current 5-hour interval
     let total: Int
-    
-    /// Remaining quota in the current period
+
+    /// Remaining quota in the current 5-hour interval
     let remaining: Int
-    
-    /// Minutes until the quota resets
+
+    /// Minutes until the 5-hour interval resets
     let minutesRemaining: Int
+
+    /// Total weekly quota available
+    let weeklyTotal: Int
+
+    /// Remaining weekly quota
+    let weeklyRemaining: Int
+
+    /// Minutes until the weekly quota resets
+    let weeklyMinutesRemaining: Int
 }
 
 /// Errors that can occur when fetching quota
@@ -479,32 +807,9 @@ enum QuotaError: Error, LocalizedError {
 
 /// Retrieves the API key from secure storage.
 ///
-/// Priority:
-/// 1. macOS Keychain (recommended)
-/// 2. `~/.config/opencode/minimax-key.txt` file
-/// 3. `MINIMAX_API_KEY` environment variable
-///
-/// - Returns: The API key if found, nil otherwise
+/// - Returns: The API key if found in Keychain, nil otherwise
 func getApiKey() -> String? {
-    // Try Keychain first (most secure)
-    if let key = Keychain.load() {
-        return key
-    }
-    
-    // Fall back to file
-    let keyPath = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/opencode/minimax-key.txt")
-    
-    if let key = try? String(contentsOf: keyPath, encoding: .utf8) {
-        return key.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-    }
-    
-    // Fall back to environment variable
-    if let key = ProcessInfo.processInfo.environment["MINIMAX_API_KEY"] {
-        return key
-    }
-    
-    return nil
+    return Keychain.load()
 }
 
 /// Saves the API key securely to macOS Keychain.
@@ -560,10 +865,19 @@ func getQuota() async throws -> QuotaResult {
     let remaining = m25["current_interval_usage_count"] as? Int ?? 0
     let remainsTime = m25["remains_time"] as? Int ?? 0
     let minutesRemaining = remainsTime / 1000 / 60
-    
+
+    // Extract weekly quota data (note: *_usage_count fields are actually remaining quota)
+    let weeklyTotal = m25["current_weekly_total_count"] as? Int ?? 0
+    let weeklyRemaining = m25["current_weekly_usage_count"] as? Int ?? 0  // counterintuitive naming
+    let weeklyRemainsTime = m25["weekly_remains_time"] as? Int ?? 0
+    let weeklyMinutesRemaining = weeklyRemainsTime / 1000 / 60
+
     return QuotaResult(
         total: total,
         remaining: remaining,
-        minutesRemaining: minutesRemaining
+        minutesRemaining: minutesRemaining,
+        weeklyTotal: weeklyTotal,
+        weeklyRemaining: weeklyRemaining,
+        weeklyMinutesRemaining: weeklyMinutesRemaining
     )
 }

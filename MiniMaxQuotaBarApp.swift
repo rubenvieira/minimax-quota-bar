@@ -75,14 +75,16 @@ enum Keychain {
 
 // MARK: - App Entry Point
 
+/// Strong reference to the delegate to ensure it's not deallocated by ARC
+private let sharedAppDelegate = AppDelegate()
+
 /// Main entry point for the application.
 /// Uses @main attribute with a static main() function for proper lifecycle management.
 @main
 struct MiniMaxQuotaBarApp {
     static func main() {
         let app = NSApplication.shared
-        let delegate = AppDelegate()
-        app.delegate = delegate
+        app.delegate = sharedAppDelegate
         app.run()
     }
 }
@@ -105,15 +107,21 @@ class SettingsWindowController: NSWindowController {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 400),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 380),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Settings"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.level = .floating
         window.center()
+
+        // Match the Notch HUD's dark, premium aesthetic
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(white: 0.1, alpha: 1.0)
 
         self.init(window: window)
         setupUI()
@@ -127,139 +135,145 @@ class SettingsWindowController: NSWindowController {
         contentView.addSubview(containerView)
 
         // ── Branded header: App icon + name + version ──
-        let headerY: CGFloat = 340
+        let headerY: CGFloat = 380 - 40 - 56 // 284
 
         // App icon (from bundle)
-        let iconView = NSImageView(frame: NSRect(x: 24, y: headerY - 4, width: 48, height: 48))
+        let iconView = NSImageView(frame: NSRect(x: 32, y: headerY, width: 56, height: 56))
         if let appIcon = NSImage(named: NSImage.applicationIconName) {
             iconView.image = appIcon
         }
         containerView.addSubview(iconView)
 
-        let appNameLabel = NSTextField(labelWithString: "MiniMaxQuotaBar")
-        appNameLabel.font = NSFont.boldSystemFont(ofSize: 18)
-        appNameLabel.frame = NSRect(x: 80, y: headerY + 14, width: 300, height: 22)
+        let appNameLabel = NSTextField(labelWithString: "MiniMax Quota Bar")
+        appNameLabel.font = NSFont.systemFont(ofSize: 20, weight: .semibold)
+        appNameLabel.textColor = .white
+        appNameLabel.frame = NSRect(x: 104, y: headerY + 30, width: 300, height: 26)
         containerView.addSubview(appNameLabel)
 
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? "1.0"
         let versionLabel = NSTextField(labelWithString: "Version \(version)")
-        versionLabel.font = NSFont.systemFont(ofSize: 12)
-        versionLabel.textColor = NSColor.secondaryLabelColor
-        versionLabel.frame = NSRect(x: 80, y: headerY - 4, width: 300, height: 16)
+        versionLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        versionLabel.textColor = NSColor(white: 0.6, alpha: 1.0)
+        versionLabel.frame = NSRect(x: 104, y: headerY + 8, width: 300, height: 18)
         containerView.addSubview(versionLabel)
 
         // Separator below header
-        let headerSep = NSBox(frame: NSRect(x: 24, y: headerY - 18, width: 432, height: 1))
+        let headerSep = NSBox(frame: NSRect(x: 32, y: 260, width: 376, height: 1))
         headerSep.boxType = .separator
         containerView.addSubview(headerSep)
 
         // ── API Key section ──
-        let titleLabel = NSTextField(labelWithString: "API Key")
-        titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
-        titleLabel.frame = NSRect(x: 24, y: 287, width: 432, height: 24)
+        let titleLabel = NSTextField(labelWithString: "API Key Configuration")
+        titleLabel.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.frame = NSRect(x: 32, y: 216, width: 376, height: 20)
         containerView.addSubview(titleLabel)
 
         // Description label
-        let descLabel = NSTextField(wrappingLabelWithString: "Enter your MiniMax API key. The key will be stored securely in macOS Keychain with Touch ID protection.")
+        let descLabel = NSTextField(wrappingLabelWithString: "Enter your MiniMax API key to display live quota usage. Your key is securely encrypted and stored in the macOS Keychain.")
         descLabel.font = NSFont.systemFont(ofSize: 12)
-        descLabel.textColor = NSColor.secondaryLabelColor
-        descLabel.frame = NSRect(x: 24, y: 252, width: 432, height: 36)
+        descLabel.textColor = NSColor(white: 0.65, alpha: 1.0)
+        descLabel.frame = NSRect(x: 32, y: 176, width: 376, height: 32)
         containerView.addSubview(descLabel)
 
-        // Input field container with styled border
-        let inputContainer = NSView(frame: NSRect(x: 24, y: 202, width: 432, height: 40))
+        // Input field container with glass look
+        let inputContainer = NSView(frame: NSRect(x: 32, y: 120, width: 376, height: 40))
         inputContainer.wantsLayer = true
         inputContainer.layer?.cornerRadius = 8
+        inputContainer.layer?.backgroundColor = NSColor(white: 0.15, alpha: 1.0).cgColor
         inputContainer.layer?.borderWidth = 1
-        inputContainer.layer?.borderColor = NSColor.separatorColor.cgColor
-        inputContainer.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        inputContainer.layer?.borderColor = NSColor(white: 0.25, alpha: 1.0).cgColor
 
         // Plain text field (hidden by default)
-        plainTextField = NSTextField(frame: NSRect(x: 12, y: 6, width: 370, height: 28))
+        plainTextField = NSTextField(frame: NSRect(x: 12, y: 8, width: 318, height: 24))
         plainTextField.placeholderString = "Enter API key..."
         plainTextField.stringValue = getApiKey() ?? ""
         plainTextField.isHidden = true
         plainTextField.isBordered = false
+        plainTextField.focusRingType = .none
         plainTextField.backgroundColor = .clear
-        plainTextField.font = NSFont.systemFont(ofSize: 13)
+        plainTextField.textColor = .white
+        plainTextField.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         inputContainer.addSubview(plainTextField)
 
         // Secure text field
-        secureTextField = NSSecureTextField(frame: NSRect(x: 12, y: 6, width: 370, height: 28))
+        secureTextField = NSSecureTextField(frame: NSRect(x: 12, y: 8, width: 318, height: 24))
         secureTextField.placeholderString = "Enter API key..."
         secureTextField.stringValue = getApiKey() ?? ""
         secureTextField.isBordered = false
+        secureTextField.focusRingType = .none
         secureTextField.backgroundColor = .clear
-        secureTextField.font = NSFont.systemFont(ofSize: 13)
+        secureTextField.textColor = .white
+        secureTextField.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         inputContainer.addSubview(secureTextField)
 
         // Toggle button (eye icon)
-        toggleButton = NSButton(frame: NSRect(x: 385, y: 4, width: 32, height: 32))
+        toggleButton = NSButton(frame: NSRect(x: 338, y: 8, width: 24, height: 24))
         toggleButton.bezelStyle = .inline
         toggleButton.isBordered = false
         toggleButton.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Show/Hide")
-        toggleButton.contentTintColor = NSColor.secondaryLabelColor
+        toggleButton.contentTintColor = NSColor(white: 0.7, alpha: 1.0)
         toggleButton.target = self
         toggleButton.action = #selector(toggleVisibility)
         inputContainer.addSubview(toggleButton)
 
         containerView.addSubview(inputContainer)
 
-        // Status label
+        // Status label below input
         statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 12)
-        statusLabel.frame = NSRect(x: 24, y: 175, width: 432, height: 20)
+        statusLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        statusLabel.frame = NSRect(x: 32, y: 94, width: 376, height: 16)
         statusLabel.isHidden = true
         containerView.addSubview(statusLabel)
+        
+        // ── Action Buttons ──
 
-        // Separator
-        let separator = NSBox(frame: NSRect(x: 24, y: 157, width: 432, height: 1))
-        separator.boxType = .separator
-        containerView.addSubview(separator)
-
-        // Buttons row with icons
-        let buttonY: CGFloat = 105
-
-        // Get API Key button with icon
-        let getKeyButton = NSButton(frame: NSRect(x: 24, y: buttonY, width: 130, height: 32))
+        // Get API Key button
+        let getKeyButton = NSButton(frame: NSRect(x: 26, y: 58, width: 110, height: 32))
         getKeyButton.bezelStyle = .rounded
-        getKeyButton.image = NSImage(systemSymbolName: "arrow.up.right.square", accessibilityDescription: nil)
         getKeyButton.imagePosition = .imageLeading
+        if let linkImg = NSImage(systemSymbolName: "link", accessibilityDescription: nil) {
+            getKeyButton.image = linkImg
+        }
         getKeyButton.title = "Get API Key"
         getKeyButton.target = self
         getKeyButton.action = #selector(openGetKeyURL)
         containerView.addSubview(getKeyButton)
 
-        // Delete button with icon
-        let deleteButton = NSButton(frame: NSRect(x: 162, y: buttonY, width: 120, height: 32))
+        // Delete button
+        let deleteButton = NSButton(frame: NSRect(x: 138, y: 58, width: 90, height: 32))
         deleteButton.bezelStyle = .rounded
-        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
         deleteButton.imagePosition = .imageLeading
+        if let trashImg = NSImage(systemSymbolName: "trash", accessibilityDescription: nil) {
+            deleteButton.image = trashImg
+        }
         deleteButton.title = "Delete"
         deleteButton.contentTintColor = NSColor.systemRed
         deleteButton.target = self
         deleteButton.action = #selector(deleteKey)
         containerView.addSubview(deleteButton)
 
-        // Test button with icon
-        testButton = NSButton(frame: NSRect(x: 290, y: buttonY, width: 90, height: 32))
+        // Test button
+        testButton = NSButton(frame: NSRect(x: 322, y: 58, width: 90, height: 32))
         testButton.bezelStyle = .rounded
-        testButton.image = NSImage(systemSymbolName: "antenna.radiowaves.left.and.right", accessibilityDescription: nil)
         testButton.imagePosition = .imageLeading
+        if let testImg = NSImage(systemSymbolName: "antenna.radiowaves.left.and.right", accessibilityDescription: nil) {
+            testButton.image = testImg
+        }
         testButton.title = "Test"
         testButton.target = self
         testButton.action = #selector(testConnection)
         containerView.addSubview(testButton)
 
         // Bottom separator
-        let bottomSeparator = NSBox(frame: NSRect(x: 24, y: 87, width: 432, height: 1))
+        let bottomSeparator = NSBox(frame: NSRect(x: 32, y: 48, width: 376, height: 1))
         bottomSeparator.boxType = .separator
         containerView.addSubview(bottomSeparator)
 
         // Cancel button
-        let cancelButton = NSButton(frame: NSRect(x: 300, y: 41, width: 80, height: 32))
+        let cancelButton = NSButton(frame: NSRect(x: 242, y: 12, width: 80, height: 32))
         cancelButton.bezelStyle = .rounded
         cancelButton.title = "Cancel"
         cancelButton.target = self
@@ -267,7 +281,7 @@ class SettingsWindowController: NSWindowController {
         containerView.addSubview(cancelButton)
 
         // Save button (default, prominent)
-        let saveButton = NSButton(frame: NSRect(x: 388, y: 41, width: 68, height: 32))
+        let saveButton = NSButton(frame: NSRect(x: 328, y: 12, width: 80, height: 32))
         saveButton.bezelStyle = .rounded
         saveButton.title = "Save"
         saveButton.keyEquivalent = "\r"
@@ -283,12 +297,12 @@ class SettingsWindowController: NSWindowController {
             plainTextField.stringValue = secureTextField.stringValue
             secureTextField.isHidden = true
             plainTextField.isHidden = false
-            toggleButton.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "Show/Hide")
+            toggleButton.image = NSImage(systemSymbolName: "eye.slash.fill", accessibilityDescription: "Show/Hide")
         } else {
             secureTextField.stringValue = plainTextField.stringValue
             plainTextField.isHidden = true
             secureTextField.isHidden = false
-            toggleButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "Show/Hide")
+            toggleButton.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Show/Hide")
         }
     }
 
@@ -382,12 +396,15 @@ class SettingsWindowController: NSWindowController {
 // MARK: - AppDelegate
 
 /// Application delegate responsible for managing the menu bar item and app lifecycle.
-class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate, NotchWindowDelegate {
     
     // MARK: - Properties
     
     /// The status bar item displayed in the menu bar
     var statusItem: NSStatusItem!
+    
+    /// Controller for the notch-blended HUD window
+    var notchController: NotchWindowController?
     
     /// Timer for auto-refreshing quota data
     var timer: Timer?
@@ -422,7 +439,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
         setupStatusItem()
-        setupMenu()
         fetchQuota()
         startAutoRefresh()
         checkForUpdates()
@@ -549,10 +565,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
             button.title = "⏳"  // Loading indicator
             button.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
             button.toolTip = "MiniMax Quota — Loading..."
+            button.target = self
+            button.action = #selector(toggleHUD(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            print("setupStatusItem: target/action set")
         }
     }
     
-    /// Sets up the dropdown menu with options
+    /// Toggles the Notch HUD window
+    @objc func toggleHUD(_ sender: Any?) {
+        if notchController == nil {
+            notchController = NotchWindowController()
+            notchController?.delegate = self
+        }
+        
+        if notchController?.window?.isVisible == true {
+            notchController?.hideHUD()
+        } else {
+            notchController?.showHUD()
+            fetchQuota()
+        }
+    }
+    
+    /// Sets up the main menu with options
+// removed setupMenu
+    /// Sets up the main menu with options
     private func setupMainMenu() {
         let mainMenu = NSMenu()
 
@@ -575,39 +612,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
 
         NSApp.mainMenu = mainMenu
-    }
-
-    private func setupMenu() {
-        let menu = NSMenu()
-        
-        // Header
-        let titleItem = NSMenuItem(title: "MiniMax Quota", action: nil, keyEquivalent: "")
-        titleItem.isEnabled = false
-        menu.addItem(titleItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // Refresh option
-        let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
-        refreshItem.target = self
-        refreshItem.toolTip = "Refresh quota data"
-        menu.addItem(refreshItem)
-        
-        // Settings option
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        settingsItem.toolTip = "Configure API key and preferences"
-        menu.addItem(settingsItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // Quit option
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
-        quitItem.target = self
-        quitItem.toolTip = "Quit the application"
-        menu.addItem(quitItem)
-        
-        statusItem.menu = menu
     }
     
     /// Starts the auto-refresh timer
@@ -646,21 +650,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
 
         // Store reference
         modalSettingsWindow = settingsWindow
+        modalSettingsController = settingsController
 
         // Run modal event loop
         NSApp.runModal(for: settingsWindow)
     }
 
     private var modalSettingsWindow: NSWindow?
+    private var modalSettingsController: SettingsWindowController?
 
     func closeSettings(returnCode: NSApplication.ModalResponse) {
         NSApp.stopModal(withCode: returnCode)
         modalSettingsWindow?.orderOut(nil)
         modalSettingsWindow = nil
+        modalSettingsController = nil
 
         if returnCode == .OK || returnCode == .alertThirdButtonReturn {
             fetchQuota()
         }
+    }
+
+    // MARK: - NotchWindowDelegate
+    
+    func refreshRequested() {
+        refresh()
+    }
+    
+    func settingsRequested() {
+        notchController?.hideHUD()
+        openSettings()
+    }
+    
+    func quitRequested() {
+        quit()
     }
 
     // MARK: - SettingsWindowDelegate
@@ -796,116 +818,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         let weeklyTip = "\(weeklyPercent)% used (weekly)"
         statusItem.button?.toolTip = "MiniMax: \(intervalTip) · \(weeklyTip)"
 
-        // Build a new menu with quota info
-        let menu = NSMenu()
-
-        // ── Header ──
-        let titleItem = NSMenuItem()
-        let titleAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.boldSystemFont(ofSize: 13)
-        ]
-        titleItem.attributedTitle = NSAttributedString(
-            string: "MiniMax Quota", attributes: titleAttrs
-        )
-        titleItem.action = #selector(noAction)
-        titleItem.target = self
-        menu.addItem(titleItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ── 5h Interval Section (custom view with progress bar) ──
-        let hours = quota.minutesRemaining / 60
-        let minutes = quota.minutesRemaining % 60
-        let intervalTimeString = hours > 0
-            ? "\(hours) hr \(minutes) min" : "\(minutes) min"
-
-        let intervalView = QuotaSectionView(
-            icon: "clock.arrow.circlepath",
-            title: "5h Interval",
-            used: intervalUsed,
-            total: quota.total,
-            percent: intervalPercent,
-            resetLabel: "Resets in \(intervalTimeString)",
-            color: colorForPercent(intervalPercent),
-            formatter: numberFormatter
-        )
-        let intervalItem = NSMenuItem()
-        intervalItem.view = intervalView
-        menu.addItem(intervalItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ── Weekly Section (custom view with progress bar) ──
-        let weeklyDays = quota.weeklyMinutesRemaining / (24 * 60)
-        let weeklyRemainingMinutes = quota.weeklyMinutesRemaining % (24 * 60)
-        let weeklyHours = weeklyRemainingMinutes / 60
-        var weeklyTimeString: String
-        if weeklyDays > 0 {
-            weeklyTimeString = "\(weeklyDays) day \(weeklyHours) hr"
-        } else if weeklyHours > 0 {
-            weeklyTimeString = "\(weeklyHours) hr \(quota.weeklyMinutesRemaining % 60) min"
-        } else {
-            weeklyTimeString = "\(quota.weeklyMinutesRemaining) min"
-        }
-
-        let weeklyView = QuotaSectionView(
-            icon: "calendar",
-            title: "Weekly",
-            used: weeklyUsed,
-            total: quota.weeklyTotal,
-            percent: weeklyPercent,
-            resetLabel: "Resets in \(weeklyTimeString)",
-            color: colorForPercent(weeklyPercent),
-            formatter: numberFormatter
-        )
-        let weeklyItem = NSMenuItem()
-        weeklyItem.view = weeklyView
-        menu.addItem(weeklyItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ── Last refreshed timestamp ──
-        if let refreshDate = lastRefreshDate {
-            let agoString = relativeTimeString(from: refreshDate)
-            let refreshedItem = NSMenuItem()
-            refreshedItem.attributedTitle = NSAttributedString(
-                string: "Updated \(agoString)",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 11),
-                    .foregroundColor: NSColor.tertiaryLabelColor
-                ]
-            )
-            refreshedItem.action = #selector(noAction)
-            refreshedItem.target = self
-            menu.addItem(refreshedItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // ── Refresh option ──
-        let refreshItem = NSMenuItem(
-            title: "Refresh", action: #selector(refresh), keyEquivalent: "r"
-        )
-        refreshItem.target = self
-        menu.addItem(refreshItem)
-
-        // ── Settings option ──
-        let settingsItem = NSMenuItem(
-            title: "Settings...", action: #selector(openSettings), keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ── Quit option ──
-        let quitItem = NSMenuItem(
-            title: "Quit", action: #selector(quit), keyEquivalent: "q"
-        )
-        quitItem.target = self
-        menu.addItem(quitItem)
-
-        // Assign the new menu
-        statusItem.menu = menu
+        // Update HUD Window
+        notchController?.update(quota: quota, colorForPercent: colorForPercent)
     }
 
     /// Returns a human-readable relative time string
@@ -1080,24 +994,31 @@ class QuotaSectionView: NSView {
 
 /// A small rounded progress bar drawn with Core Graphics.
 class QuotaProgressBar: NSView {
-    private let percent: Int
-    private let barColor: NSColor
+    private var percent: Int
+    private var barColor: NSColor
+    private var trackColor: NSColor
 
-    init(frame: NSRect, percent: Int, color: NSColor) {
+    init(frame: NSRect, percent: Int, color: NSColor, trackColor: NSColor? = nil) {
         self.percent = percent
         self.barColor = color
+        self.trackColor = trackColor ?? NSColor.quaternaryLabelColor
         super.init(frame: frame)
         wantsLayer = true
     }
 
     required init?(coder: NSCoder) { fatalError() }
+    
+    func update(percent: Int, color: NSColor) {
+        self.percent = percent
+        self.barColor = color
+        self.needsDisplay = true
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let bounds = self.bounds
         let radius = bounds.height / 2
 
         // Track (background)
-        let trackColor = NSColor.quaternaryLabelColor
         let trackPath = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
         trackColor.setFill()
         trackPath.fill()
@@ -1239,3 +1160,351 @@ func getQuota() async throws -> QuotaResult {
         weeklyMinutesRemaining: weeklyMinutesRemaining
     )
 }
+
+// MARK: - Notch HUD UI
+
+protocol NotchWindowDelegate: AnyObject {
+    func refreshRequested()
+    func settingsRequested()
+    func quitRequested()
+}
+
+class NotchWindowController: NSWindowController {
+    weak var delegate: NotchWindowDelegate?
+    
+    private var backgroundView: NSView!
+    
+    private var intervalView: HUDSectionView!
+    private var weeklyView: HUDSectionView!
+    
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
+    
+    convenience init() {
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+        let physicalFrame = screen.frame
+        let visibleFrame = screen.visibleFrame
+        
+        let menuBarHeight = physicalFrame.maxY - visibleFrame.maxY
+        let hasNotch = menuBarHeight > 24
+        
+        let contentHeight: CGFloat = 36
+        // Extend 10px ABOVE the physical screen top so there's
+        // zero chance of a visible top edge / border.
+        let overshoot: CGFloat = 10
+        let totalHeight = menuBarHeight + contentHeight + overshoot
+        let totalWidth: CGFloat = hasNotch ? 580 : 480
+        
+        let x = physicalFrame.midX - (totalWidth / 2)
+        let y = physicalFrame.maxY - totalHeight + overshoot
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: x, y: y,
+                                width: totalWidth, height: totalHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: false)
+        window.level = .popUpMenu
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false  // No shadow = no visible edge
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        
+        self.init(window: window)
+        setupUI(menuBarHeight: menuBarHeight, hasNotch: hasNotch,
+                overshoot: overshoot)
+    }
+    
+    private func setupUI(menuBarHeight: CGFloat, hasNotch: Bool,
+                         overshoot: CGFloat) {
+        guard let contentView = window?.contentView else { return }
+        
+        // Solid black background — extends above screen,
+        // rounded only at the bottom.
+        backgroundView = NSView(frame: contentView.bounds)
+        backgroundView.wantsLayer = true
+        backgroundView.layer?.backgroundColor = NSColor.black.cgColor
+        backgroundView.layer?.cornerRadius = 18
+        backgroundView.layer?.maskedCorners = [
+            .layerMinXMinYCorner, .layerMaxXMinYCorner
+        ]
+        backgroundView.autoresizingMask = [.width, .height]
+        contentView.addSubview(backgroundView)
+        
+        // Content area spans from just below the screen top
+        // all the way to the window bottom — sections extend up
+        // alongside the notch on each side.
+        let contentArea = NSView()
+        contentArea.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.addSubview(contentArea)
+        
+        NSLayoutConstraint.activate([
+            contentArea.leadingAnchor.constraint(
+                equalTo: backgroundView.leadingAnchor),
+            contentArea.trailingAnchor.constraint(
+                equalTo: backgroundView.trailingAnchor),
+            contentArea.topAnchor.constraint(
+                equalTo: backgroundView.topAnchor,
+                constant: overshoot),
+            contentArea.bottomAnchor.constraint(
+                equalTo: backgroundView.bottomAnchor)
+        ])
+        
+        // Notch width — keep it tight so content hugs close
+        let notchHalf: CGFloat = hasNotch ? 100 : 20
+        
+        // --- Left: 5h Interval ---
+        intervalView = HUDSectionView(title: "5h Interval",
+                                       icon: "clock.arrow.circlepath")
+        contentArea.addSubview(intervalView)
+        
+        // --- Right: Weekly ---
+        weeklyView = HUDSectionView(title: "Weekly", icon: "calendar")
+        contentArea.addSubview(weeklyView)
+        
+        // --- Center: Action buttons under the notch ---
+        let actions = setupActionsView()
+        actions.translatesAutoresizingMaskIntoConstraints = false
+        contentArea.addSubview(actions)
+        
+        NSLayoutConstraint.activate([
+            // Left section — extends from top to bottom,
+            // hugging close alongside the notch.
+            intervalView.leadingAnchor.constraint(
+                equalTo: contentArea.leadingAnchor, constant: 16),
+            intervalView.trailingAnchor.constraint(
+                equalTo: contentArea.centerXAnchor, constant: -notchHalf),
+            intervalView.topAnchor.constraint(
+                equalTo: contentArea.topAnchor, constant: 2),
+            intervalView.bottomAnchor.constraint(
+                equalTo: contentArea.bottomAnchor, constant: -4),
+            
+            // Right section — mirrors left side
+            weeklyView.leadingAnchor.constraint(
+                equalTo: contentArea.centerXAnchor, constant: notchHalf),
+            weeklyView.trailingAnchor.constraint(
+                equalTo: contentArea.trailingAnchor, constant: -16),
+            weeklyView.topAnchor.constraint(
+                equalTo: contentArea.topAnchor, constant: 2),
+            weeklyView.bottomAnchor.constraint(
+                equalTo: contentArea.bottomAnchor, constant: -4),
+            
+            // Action buttons — centered horizontally under
+            // the notch, in the lower half of the gap.
+            actions.centerXAnchor.constraint(
+                equalTo: contentArea.centerXAnchor),
+            actions.bottomAnchor.constraint(
+                equalTo: contentArea.bottomAnchor, constant: -10)
+        ])
+    }
+    
+    // MARK: - Action Buttons (horizontal row under notch)
+    
+    private func setupActionsView() -> NSStackView {
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 12
+        
+        stack.addArrangedSubview(makeBtn(
+            "arrow.clockwise", "Refresh", #selector(refreshClicked)))
+        stack.addArrangedSubview(makeBtn(
+            "gearshape", "Settings", #selector(settingsClicked)))
+        stack.addArrangedSubview(makeBtn(
+            "xmark.circle.fill", "Quit", #selector(quitClicked),
+            tint: NSColor(red: 1, green: 0.35, blue: 0.35, alpha: 0.7)))
+        
+        return stack
+    }
+    
+    private func makeBtn(
+        _ symbol: String, _ tip: String, _ action: Selector,
+        tint: NSColor = .white.withAlphaComponent(0.5)
+    ) -> NSButton {
+        let img = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: tip)!
+            .withSymbolConfiguration(
+                .init(pointSize: 12, weight: .medium))!
+        let b = NSButton(image: img, target: self, action: action)
+        b.isBordered = false
+        b.toolTip = tip
+        b.contentTintColor = tint
+        return b
+    }
+    
+    @objc private func refreshClicked() { delegate?.refreshRequested() }
+    @objc private func settingsClicked() { delegate?.settingsRequested() }
+    @objc private func quitClicked() { delegate?.quitRequested() }
+    
+    // MARK: - Show / Hide
+    
+    func showHUD() {
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        localMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown]
+        ) { [weak self] event in
+            if event.keyCode == 53 { self?.hideHUD(); return nil }
+            return event
+        }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in self?.hideHUD() }
+    }
+    
+    func hideHUD() {
+        window?.orderOut(nil)
+        if let m = localMonitor {
+            NSEvent.removeMonitor(m); localMonitor = nil }
+        if let m = globalMonitor {
+            NSEvent.removeMonitor(m); globalMonitor = nil }
+    }
+    
+    // MARK: - Data
+    
+    func update(quota: QuotaResult,
+                colorForPercent: (Int) -> NSColor) {
+        let iUsed = quota.total - quota.remaining
+        let iPct = quota.total > 0
+            ? Int(Double(iUsed) / Double(quota.total) * 100) : 0
+        let ih = quota.minutesRemaining / 60
+        let im = quota.minutesRemaining % 60
+        let iTime = ih > 0 ? "\(ih)h \(im)m" : "\(im)m"
+        intervalView.update(used: iUsed, total: quota.total,
+                            percent: iPct, resetIn: iTime,
+                            color: colorForPercent(iPct))
+        
+        let wUsed = quota.weeklyTotal - quota.weeklyRemaining
+        let wPct = quota.weeklyTotal > 0
+            ? Int(Double(wUsed) / Double(quota.weeklyTotal) * 100) : 0
+        let wd = quota.weeklyMinutesRemaining / 1440
+        let wrm = quota.weeklyMinutesRemaining % 1440
+        let wh = wrm / 60
+        let wTime = wd > 0 ? "\(wd)d \(wh)h"
+            : (wh > 0 ? "\(wh)h \(wrm % 60)m"
+               : "\(quota.weeklyMinutesRemaining)m")
+        weeklyView.update(used: wUsed, total: quota.weeklyTotal,
+                          percent: wPct, resetIn: wTime,
+                          color: colorForPercent(wPct))
+    }
+}
+
+// MARK: - HUD Section View
+
+class HUDSectionView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let percentLabel = NSTextField(labelWithString: "")
+    private let detailLabel = NSTextField(labelWithString: "")
+    private let resetLabel = NSTextField(labelWithString: "")
+    private var progressBar: QuotaProgressBar!
+    
+    init(title: String, icon: String) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        
+        // Row 1: icon + title ··· percentage
+        let hdr = NSStackView()
+        hdr.orientation = .horizontal
+        hdr.spacing = 4
+        hdr.alignment = .centerY
+        if let img = NSImage(systemSymbolName: icon,
+                             accessibilityDescription: nil)?
+            .withSymbolConfiguration(
+                .init(pointSize: 9, weight: .medium)) {
+            let iv = NSImageView(image: img)
+            iv.contentTintColor = .white.withAlphaComponent(0.4)
+            hdr.addArrangedSubview(iv)
+        }
+        titleLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        titleLabel.textColor = .white.withAlphaComponent(0.4)
+        hdr.addArrangedSubview(titleLabel)
+        
+        percentLabel.font = .monospacedDigitSystemFont(
+            ofSize: 13, weight: .bold)
+        percentLabel.textColor = .white
+        percentLabel.alignment = .right
+        percentLabel.setContentHuggingPriority(
+            .required, for: .horizontal)
+        percentLabel.setContentCompressionResistancePriority(
+            .required, for: .horizontal)
+        
+        let topRow = NSStackView()
+        topRow.orientation = .horizontal
+        topRow.distribution = .fill
+        topRow.addArrangedSubview(hdr)
+        topRow.addArrangedSubview(percentLabel)
+        hdr.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        
+        // Row 2: progress bar
+        progressBar = QuotaProgressBar(
+            frame: .zero, percent: 0, color: .systemGreen,
+            trackColor: .white.withAlphaComponent(0.08))
+        progressBar.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Row 3: count ··· reset timer
+        detailLabel.font = .monospacedDigitSystemFont(
+            ofSize: 9, weight: .regular)
+        detailLabel.textColor = .white.withAlphaComponent(0.3)
+        
+        resetLabel.font = .monospacedDigitSystemFont(
+            ofSize: 9, weight: .regular)
+        resetLabel.textColor = .white.withAlphaComponent(0.25)
+        resetLabel.alignment = .right
+        resetLabel.setContentHuggingPriority(
+            .required, for: .horizontal)
+        resetLabel.setContentCompressionResistancePriority(
+            .required, for: .horizontal)
+        
+        let btmRow = NSStackView()
+        btmRow.orientation = .horizontal
+        btmRow.distribution = .fill
+        btmRow.addArrangedSubview(detailLabel)
+        btmRow.addArrangedSubview(resetLabel)
+        detailLabel.setContentHuggingPriority(
+            .defaultLow, for: .horizontal)
+        
+        // Assemble
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = 3
+        stack.alignment = .leading
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        
+        stack.addArrangedSubview(topRow)
+        stack.addArrangedSubview(progressBar)
+        stack.addArrangedSubview(btmRow)
+        
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            progressBar.widthAnchor.constraint(
+                equalTo: stack.widthAnchor),
+            progressBar.heightAnchor.constraint(equalToConstant: 5),
+            topRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            btmRow.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        ])
+        
+        titleLabel.stringValue = title
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+    
+    func update(used: Int, total: Int, percent: Int,
+                resetIn: String, color: NSColor) {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        let u = f.string(from: NSNumber(value: used)) ?? "\(used)"
+        let t = f.string(from: NSNumber(value: total)) ?? "\(total)"
+        
+        percentLabel.stringValue = "\(percent)%"
+        percentLabel.textColor = color
+        detailLabel.stringValue = "\(u) / \(t)"
+        resetLabel.stringValue = "⏱ \(resetIn)"
+        progressBar.update(percent: percent, color: color)
+    }
+}
+

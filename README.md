@@ -1,6 +1,7 @@
 # MiniMaxQuotaBar
 
-A macOS menu bar app that displays your MiniMax API quota usage in real-time.
+A premium macOS menu bar app that displays your MiniMax API quota usage in real-time. 
+Designed with modern MacBooks in mind, MiniMaxQuotaBar features a stunning **Zero-Border Notch HUD** that flawlessly blends with your MacBook's physical hardware notch, making the app feel like a native macOS system extension.
 
 ![macOS Menu Bar](https://img.shields.io/badge/macOS-13.0%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
@@ -8,12 +9,12 @@ A macOS menu bar app that displays your MiniMax API quota usage in real-time.
 
 ## Features
 
-- 📊 **Real-time quota monitoring** - Displays your MiniMax API usage percentage in the menu bar (shows the more critical quota)
-- 📅 **Dual quota tracking** - Monitors both 5-hour interval and weekly quotas
-- 🔄 **Auto-refresh** - Automatically updates every 5 minutes
-- 🎨 **Status indicators** - Color-coded status icons (green/yellow/red)
-- 🍎 **Native macOS** - Runs as a menu bar app (no dock icon)
-- 🔐 **Secure** - API key stored securely in macOS Keychain
+- 💻 **Zero-Border Notch HUD** - Click the menu bar icon to reveal a gorgeously designed heads-up display that perfectly hugs the physical notch of modern MacBooks.
+- ✨ **Premium Aesthetics** - Both the HUD and the Settings dialog feature meticulously crafted dark-mode themes, glassmorphism, and pixel-perfect SF Symbols alignment.
+- 📊 **Real-time Quota Monitoring** - Displays your MiniMax API usage percentage directly in the menu bar (prioritizing the most critical quota).
+- 📅 **Dual Quota Tracking** - Intuitively tracks both your 5-hour interval and weekly quota thresholds with elegant visual progress bars.
+- 🔄 **Auto-Refresh & Alerts** - Automatically updates every 5 minutes and pushes a native macOS notification if your quota critically exceeds 90%.
+- 🔐 **Secure by Default** - Your API key is encrypted and stored securely in the local macOS Keychain.
 
 ## Screenshot
 
@@ -53,13 +54,12 @@ xcodebuild -project MiniMaxQuotaBar.xcodeproj -scheme MiniMaxQuotaBar -configura
 
 ## Usage
 
-- Click the percentage in the menu bar to see detailed quota information
-- Menu dropdown displays:
-  - **5h Interval** - Current usage, total, and time until reset
-  - **Weekly** - Current usage, total, and time until reset
-- **Refresh** - Manually refresh quota data (⌘R)
-- **Settings** - Configure API key (⌘,)
-- **Quit** - Exit the app (⌘Q)
+- Click the percentage in the menu bar to reveal the **Notch HUD**.
+- The HUD masterfully wraps around your MacBook notch to display:
+  - **5h Interval (Left)** - Current usage mapped with a clean, pill-shaped progress bar and time until reset.
+  - **Weekly (Right)** - Symmetrical weekly usage metrics matching the left side.
+  - **Action Center (Bottom Center)** - Refresh, Settings, and Quit controls perfectly nestled right below the physical camera notch.
+- **Settings** - Configure your API key in the newly redesigned, beautiful dark-mode preference panel.
 
 ## Configuration
 

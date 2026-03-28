@@ -9,6 +9,7 @@
 import Foundation
 import AppKit
 import Security
+import UserNotifications
 
 // MARK: - Keychain Helper
 
@@ -97,13 +98,14 @@ class SettingsWindowController: NSWindowController {
     private var secureTextField: NSSecureTextField!
     private var plainTextField: NSTextField!
     private var toggleButton: NSButton!
+    private var testButton: NSButton!
     private var statusLabel: NSTextField!
     private var isShowingPlainText = false
     weak var delegate: SettingsWindowDelegate?
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 400),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -124,21 +126,50 @@ class SettingsWindowController: NSWindowController {
         containerView.autoresizingMask = [.width, .height]
         contentView.addSubview(containerView)
 
-        // Title label
+        // ── Branded header: App icon + name + version ──
+        let headerY: CGFloat = 340
+
+        // App icon (from bundle)
+        let iconView = NSImageView(frame: NSRect(x: 24, y: headerY - 4, width: 48, height: 48))
+        if let appIcon = NSImage(named: NSImage.applicationIconName) {
+            iconView.image = appIcon
+        }
+        containerView.addSubview(iconView)
+
+        let appNameLabel = NSTextField(labelWithString: "MiniMaxQuotaBar")
+        appNameLabel.font = NSFont.boldSystemFont(ofSize: 18)
+        appNameLabel.frame = NSRect(x: 80, y: headerY + 14, width: 300, height: 22)
+        containerView.addSubview(appNameLabel)
+
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "1.0"
+        let versionLabel = NSTextField(labelWithString: "Version \(version)")
+        versionLabel.font = NSFont.systemFont(ofSize: 12)
+        versionLabel.textColor = NSColor.secondaryLabelColor
+        versionLabel.frame = NSRect(x: 80, y: headerY - 4, width: 300, height: 16)
+        containerView.addSubview(versionLabel)
+
+        // Separator below header
+        let headerSep = NSBox(frame: NSRect(x: 24, y: headerY - 18, width: 432, height: 1))
+        headerSep.boxType = .separator
+        containerView.addSubview(headerSep)
+
+        // ── API Key section ──
         let titleLabel = NSTextField(labelWithString: "API Key")
         titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
-        titleLabel.frame = NSRect(x: 24, y: 270, width: 432, height: 24)
+        titleLabel.frame = NSRect(x: 24, y: 287, width: 432, height: 24)
         containerView.addSubview(titleLabel)
 
         // Description label
         let descLabel = NSTextField(wrappingLabelWithString: "Enter your MiniMax API key. The key will be stored securely in macOS Keychain with Touch ID protection.")
         descLabel.font = NSFont.systemFont(ofSize: 12)
         descLabel.textColor = NSColor.secondaryLabelColor
-        descLabel.frame = NSRect(x: 24, y: 235, width: 432, height: 36)
+        descLabel.frame = NSRect(x: 24, y: 252, width: 432, height: 36)
         containerView.addSubview(descLabel)
 
         // Input field container with styled border
-        let inputContainer = NSView(frame: NSRect(x: 24, y: 185, width: 432, height: 40))
+        let inputContainer = NSView(frame: NSRect(x: 24, y: 202, width: 432, height: 40))
         inputContainer.wantsLayer = true
         inputContainer.layer?.cornerRadius = 8
         inputContainer.layer?.borderWidth = 1
@@ -179,17 +210,17 @@ class SettingsWindowController: NSWindowController {
         // Status label
         statusLabel = NSTextField(labelWithString: "")
         statusLabel.font = NSFont.systemFont(ofSize: 12)
-        statusLabel.frame = NSRect(x: 24, y: 158, width: 432, height: 20)
+        statusLabel.frame = NSRect(x: 24, y: 175, width: 432, height: 20)
         statusLabel.isHidden = true
         containerView.addSubview(statusLabel)
 
         // Separator
-        let separator = NSBox(frame: NSRect(x: 24, y: 140, width: 432, height: 1))
+        let separator = NSBox(frame: NSRect(x: 24, y: 157, width: 432, height: 1))
         separator.boxType = .separator
         containerView.addSubview(separator)
 
         // Buttons row with icons
-        let buttonY: CGFloat = 88
+        let buttonY: CGFloat = 105
 
         // Get API Key button with icon
         let getKeyButton = NSButton(frame: NSRect(x: 24, y: buttonY, width: 130, height: 32))
@@ -213,7 +244,7 @@ class SettingsWindowController: NSWindowController {
         containerView.addSubview(deleteButton)
 
         // Test button with icon
-        let testButton = NSButton(frame: NSRect(x: 290, y: buttonY, width: 90, height: 32))
+        testButton = NSButton(frame: NSRect(x: 290, y: buttonY, width: 90, height: 32))
         testButton.bezelStyle = .rounded
         testButton.image = NSImage(systemSymbolName: "antenna.radiowaves.left.and.right", accessibilityDescription: nil)
         testButton.imagePosition = .imageLeading
@@ -223,12 +254,12 @@ class SettingsWindowController: NSWindowController {
         containerView.addSubview(testButton)
 
         // Bottom separator
-        let bottomSeparator = NSBox(frame: NSRect(x: 24, y: 70, width: 432, height: 1))
+        let bottomSeparator = NSBox(frame: NSRect(x: 24, y: 87, width: 432, height: 1))
         bottomSeparator.boxType = .separator
         containerView.addSubview(bottomSeparator)
 
         // Cancel button
-        let cancelButton = NSButton(frame: NSRect(x: 300, y: 24, width: 80, height: 32))
+        let cancelButton = NSButton(frame: NSRect(x: 300, y: 41, width: 80, height: 32))
         cancelButton.bezelStyle = .rounded
         cancelButton.title = "Cancel"
         cancelButton.target = self
@@ -236,7 +267,7 @@ class SettingsWindowController: NSWindowController {
         containerView.addSubview(cancelButton)
 
         // Save button (default, prominent)
-        let saveButton = NSButton(frame: NSRect(x: 388, y: 24, width: 68, height: 32))
+        let saveButton = NSButton(frame: NSRect(x: 388, y: 41, width: 68, height: 32))
         saveButton.bezelStyle = .rounded
         saveButton.title = "Save"
         saveButton.keyEquivalent = "\r"
@@ -276,7 +307,6 @@ class SettingsWindowController: NSWindowController {
         let apiKey = isShowingPlainText ? plainTextField.stringValue : secureTextField.stringValue
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        showStatus(message: "Testing with key: \(trimmedKey.prefix(5))...", isError: false)
         window?.makeFirstResponder(nil)
 
         guard !trimmedKey.isEmpty else {
@@ -284,43 +314,42 @@ class SettingsWindowController: NSWindowController {
             return
         }
 
+        // Disable button and show loading state
+        testButton.isEnabled = false
+        testButton.title = "Testing…"
+        showStatus(message: "Connecting to MiniMax API…", isError: false)
+
         // Temporarily save to test
         let originalKey = getApiKey()
         _ = setApiKey(trimmedKey)
 
-        // Use semaphore to wait for async result while allowing event processing
-        let semaphore = DispatchSemaphore(value: 0)
-        var testResult: Result<Void, Error> = .success(())
-
         Task {
             do {
                 _ = try await getQuota()
-                testResult = .success(())
+                await MainActor.run {
+                    self.showStatus(message: "✓ Connection successful!", isError: false)
+                    self.restoreTestButton()
+                }
             } catch {
-                testResult = .failure(error)
+                await MainActor.run {
+                    self.showStatus(
+                        message: "✗ \(error.localizedDescription)",
+                        isError: true
+                    )
+                    self.restoreTestButton()
+                }
             }
-            semaphore.signal()
-        }
 
-        // Pump the event loop while waiting
-        while semaphore.wait(timeout: .now() + 0.1) == .timedOut {
-            if let event = NSApp.nextEvent(matching: .any, until: Date(timeIntervalSinceNow: 0.01), inMode: .default, dequeue: true) {
-                NSApp.sendEvent(event)
+            // Restore original key if different
+            if let original = originalKey {
+                _ = setApiKey(original)
             }
         }
+    }
 
-        // Process result
-        switch testResult {
-        case .success:
-            showStatus(message: "Connection successful!", isError: false)
-        case .failure(let error):
-            showStatus(message: "Connection failed: \(error.localizedDescription)", isError: true)
-        }
-
-        // Restore original key if different
-        if let original = originalKey {
-            _ = setApiKey(original)
-        }
+    private func restoreTestButton() {
+        testButton.isEnabled = true
+        testButton.title = "Test"
     }
 
     @objc private func cancelAction() {
@@ -369,6 +398,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     /// GitHub repository for update checks
     private let githubRepo = "rubenvieira/minimax-quota-bar"
     
+    /// Timestamp of the last successful data refresh
+    private var lastRefreshDate: Date?
+    
+    /// Whether a refresh is currently in progress
+    private var isRefreshing = false
+    
+    /// Whether we've already sent a critical quota notification this session
+    private var hasNotifiedCritical = false
+    
+    /// Number formatter with grouping separators
+    private lazy var numberFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.usesGroupingSeparator = true
+        return f
+    }()
+    
     // MARK: - NSApplicationDelegate
     
     /// Called when the app has finished launching.
@@ -380,6 +426,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         fetchQuota()
         startAutoRefresh()
         checkForUpdates()
+        requestNotificationPermission()
+    }
+    
+    /// Requests permission to send macOS notifications
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .sound]
+        ) { _, _ in }
     }
     
     /// Checks GitHub for a new release and prompts user if available
@@ -494,6 +548,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         if let button = statusItem.button {
             button.title = "⏳"  // Loading indicator
             button.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+            button.toolTip = "MiniMax Quota — Loading..."
         }
     }
     
@@ -626,92 +681,161 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     
     /// Fetches quota data from the MiniMax API
     private func fetchQuota() {
+        isRefreshing = true
+        // Show refresh animation in menu bar
+        let previousTitle = statusItem.button?.title
+        let previousImage = statusItem.button?.image
+        statusItem.button?.title = " ↻"
+        
         Task {
             do {
                 let quota = try await getQuota()
                 await MainActor.run {
-                    updateStatusItem(quota: quota)
+                    self.lastRefreshDate = Date()
+                    self.isRefreshing = false
+                    self.updateStatusItem(quota: quota)
+                    self.checkCriticalQuota(quota: quota)
                 }
             } catch {
                 await MainActor.run {
-                    updateStatusItemError()
+                    self.isRefreshing = false
+                    // Restore previous state if we had one
+                    if let img = previousImage {
+                        self.statusItem.button?.image = img
+                    }
+                    if let title = previousTitle, title != " ↻" {
+                        self.statusItem.button?.title = title
+                    }
+                    self.updateStatusItemError()
                 }
             }
         }
     }
     
+    /// Sends a macOS notification if quota exceeds 90%
+    private func checkCriticalQuota(quota: QuotaResult) {
+        let intervalUsed = quota.total - quota.remaining
+        let intervalPercent = quota.total > 0
+            ? Int((Double(intervalUsed) / Double(quota.total)) * 100) : 0
+        let weeklyUsed = quota.weeklyTotal - quota.weeklyRemaining
+        let weeklyPercent = quota.weeklyTotal > 0
+            ? Int((Double(weeklyUsed) / Double(quota.weeklyTotal)) * 100) : 0
+        let maxPercent = max(intervalPercent, weeklyPercent)
+        
+        if maxPercent >= 90 && !hasNotifiedCritical {
+            hasNotifiedCritical = true
+            let content = UNMutableNotificationContent()
+            content.title = "MiniMax Quota Critical"
+            let which = intervalPercent >= weeklyPercent ? "5h interval" : "weekly"
+            content.body = "Quota at \(maxPercent)% (\(which)). Consider pausing usage."
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: "quota-critical",
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        } else if maxPercent < 80 {
+            // Reset so we can notify again if it spikes back
+            hasNotifiedCritical = false
+        }
+    }
+    
+    /// Returns the status color for a given usage percentage
+    private func colorForPercent(_ percent: Int) -> NSColor {
+        if percent > 90 {
+            return .systemRed
+        } else if percent > 75 {
+            return .systemOrange
+        } else {
+            return .systemGreen
+        }
+    }
+
+    /// Formats a number with grouping separators (e.g. 15000 → "15,000")
+    private func fmt(_ n: Int) -> String {
+        return numberFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
     /// Updates the menu bar button and dropdown menu with quota data
     /// - Parameter quota: The quota data to display
     private func updateStatusItem(quota: QuotaResult) {
         // Calculate interval usage percentage
         let intervalUsed = quota.total - quota.remaining
-        let intervalPercent = quota.total > 0 ? Int((Double(intervalUsed) / Double(quota.total)) * 100) : 0
+        let intervalPercent = quota.total > 0
+            ? Int((Double(intervalUsed) / Double(quota.total)) * 100) : 0
 
         // Calculate weekly usage percentage
         let weeklyUsed = quota.weeklyTotal - quota.weeklyRemaining
-        let weeklyPercent = quota.weeklyTotal > 0 ? Int((Double(weeklyUsed) / Double(quota.weeklyTotal)) * 100) : 0
+        let weeklyPercent = quota.weeklyTotal > 0
+            ? Int((Double(weeklyUsed) / Double(quota.weeklyTotal)) * 100) : 0
 
         // Show the worse (higher) percentage in the menu bar
         let displayPercent = max(intervalPercent, weeklyPercent)
 
         // Determine status symbol based on usage percentage
         let symbolName: String
-        let tintColor: NSColor
+        let tintColor = colorForPercent(displayPercent)
         if displayPercent > 90 {
             symbolName = "gauge.with.needle"
-            tintColor = NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
         } else if displayPercent > 75 {
             symbolName = "gauge.high"
-            tintColor = NSColor(red: 1.0, green: 0.58, blue: 0.0, alpha: 1.0)
         } else {
             symbolName = "gauge.medium"
-            tintColor = NSColor(red: 0.20, green: 0.78, blue: 0.35, alpha: 1.0)
         }
 
         if let image = createSymbolImage(named: symbolName, tintColor: tintColor) {
             statusItem.button?.image = image
         }
+
         statusItem.button?.title = " \(displayPercent)%"
         statusItem.button?.imagePosition = .imageLeading
+
+        // Tooltip for hover info
+        let intervalTip = "\(intervalPercent)% used (5h)"
+        let weeklyTip = "\(weeklyPercent)% used (weekly)"
+        statusItem.button?.toolTip = "MiniMax: \(intervalTip) · \(weeklyTip)"
 
         // Build a new menu with quota info
         let menu = NSMenu()
 
-        // Header
+        // ── Header ──
         let titleItem = NSMenuItem()
         let titleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.boldSystemFont(ofSize: 13)
         ]
-        titleItem.attributedTitle = NSAttributedString(string: "MiniMax Quota", attributes: titleAttrs)
+        titleItem.attributedTitle = NSAttributedString(
+            string: "MiniMax Quota", attributes: titleAttrs
+        )
         titleItem.action = #selector(noAction)
         titleItem.target = self
         menu.addItem(titleItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // 5h interval section
-        let intervalHeader = NSMenuItem(title: "5h Interval", action: #selector(noAction), keyEquivalent: "")
-        intervalHeader.target = self
-        menu.addItem(intervalHeader)
-
+        // ── 5h Interval Section (custom view with progress bar) ──
         let hours = quota.minutesRemaining / 60
         let minutes = quota.minutesRemaining % 60
-        let intervalTimeString = hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
-        let intervalUsedItem = NSMenuItem(title: "  • Used: \(intervalUsed) / \(quota.total) (\(intervalPercent)%)", action: #selector(noAction), keyEquivalent: "")
-        intervalUsedItem.target = self
-        menu.addItem(intervalUsedItem)
+        let intervalTimeString = hours > 0
+            ? "\(hours) hr \(minutes) min" : "\(minutes) min"
 
-        let intervalTimeItem = NSMenuItem(title: "  • Resets: in \(intervalTimeString)", action: #selector(noAction), keyEquivalent: "")
-        intervalTimeItem.target = self
-        menu.addItem(intervalTimeItem)
+        let intervalView = QuotaSectionView(
+            icon: "clock.arrow.circlepath",
+            title: "5h Interval",
+            used: intervalUsed,
+            total: quota.total,
+            percent: intervalPercent,
+            resetLabel: "Resets in \(intervalTimeString)",
+            color: colorForPercent(intervalPercent),
+            formatter: numberFormatter
+        )
+        let intervalItem = NSMenuItem()
+        intervalItem.view = intervalView
+        menu.addItem(intervalItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Weekly section
-        let weeklyHeader = NSMenuItem(title: "Weekly", action: #selector(noAction), keyEquivalent: "")
-        weeklyHeader.target = self
-        menu.addItem(weeklyHeader)
-
+        // ── Weekly Section (custom view with progress bar) ──
         let weeklyDays = quota.weeklyMinutesRemaining / (24 * 60)
         let weeklyRemainingMinutes = quota.weeklyMinutesRemaining % (24 * 60)
         let weeklyHours = weeklyRemainingMinutes / 60
@@ -723,44 +847,89 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         } else {
             weeklyTimeString = "\(quota.weeklyMinutesRemaining) min"
         }
-        let weeklyUsedItem = NSMenuItem(title: "  • Used: \(weeklyUsed) / \(quota.weeklyTotal) (\(weeklyPercent)%)", action: #selector(noAction), keyEquivalent: "")
-        weeklyUsedItem.target = self
-        menu.addItem(weeklyUsedItem)
 
-        let weeklyTimeItem = NSMenuItem(title: "  • Resets: in \(weeklyTimeString)", action: #selector(noAction), keyEquivalent: "")
-        weeklyTimeItem.target = self
-        menu.addItem(weeklyTimeItem)
+        let weeklyView = QuotaSectionView(
+            icon: "calendar",
+            title: "Weekly",
+            used: weeklyUsed,
+            total: quota.weeklyTotal,
+            percent: weeklyPercent,
+            resetLabel: "Resets in \(weeklyTimeString)",
+            color: colorForPercent(weeklyPercent),
+            formatter: numberFormatter
+        )
+        let weeklyItem = NSMenuItem()
+        weeklyItem.view = weeklyView
+        menu.addItem(weeklyItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Refresh option
-        let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
+        // ── Last refreshed timestamp ──
+        if let refreshDate = lastRefreshDate {
+            let agoString = relativeTimeString(from: refreshDate)
+            let refreshedItem = NSMenuItem()
+            refreshedItem.attributedTitle = NSAttributedString(
+                string: "Updated \(agoString)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.tertiaryLabelColor
+                ]
+            )
+            refreshedItem.action = #selector(noAction)
+            refreshedItem.target = self
+            menu.addItem(refreshedItem)
+            menu.addItem(NSMenuItem.separator())
+        }
+
+        // ── Refresh option ──
+        let refreshItem = NSMenuItem(
+            title: "Refresh", action: #selector(refresh), keyEquivalent: "r"
+        )
         refreshItem.target = self
         menu.addItem(refreshItem)
 
-        // Settings option
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        // ── Settings option ──
+        let settingsItem = NSMenuItem(
+            title: "Settings...", action: #selector(openSettings), keyEquivalent: ","
+        )
         settingsItem.target = self
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Quit option
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        // ── Quit option ──
+        let quitItem = NSMenuItem(
+            title: "Quit", action: #selector(quit), keyEquivalent: "q"
+        )
         quitItem.target = self
         menu.addItem(quitItem)
 
         // Assign the new menu
         statusItem.menu = menu
     }
+
+    /// Returns a human-readable relative time string
+    private func relativeTimeString(from date: Date) -> String {
+        let seconds = Int(-date.timeIntervalSinceNow)
+        if seconds < 5 { return "just now" }
+        if seconds < 60 { return "\(seconds)s ago" }
+        let mins = seconds / 60
+        if mins < 60 { return "\(mins) min ago" }
+        let hrs = mins / 60
+        return "\(hrs) hr ago"
+    }
     
     /// Updates status bar button to show error state
     private func updateStatusItemError() {
-        if let image = createSymbolImage(named: "exclamationmark.triangle", tintColor: NSColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)) {
+        if let image = createSymbolImage(
+            named: "exclamationmark.triangle",
+            tintColor: .systemRed
+        ) {
             statusItem.button?.image = image
         }
         statusItem.button?.title = " Error"
         statusItem.button?.imagePosition = .imageLeading
+        statusItem.button?.toolTip = "MiniMax: Failed to fetch quota"
     }
     
     /// Creates a colored SF Symbol image for the status bar
@@ -770,7 +939,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
     /// - Returns: Colored NSImage or nil if creation fails
     private func createSymbolImage(named name: String, tintColor: NSColor) -> NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: "Quota")?.withSymbolConfiguration(config) else {
+        guard let image = NSImage(
+            systemSymbolName: name,
+            accessibilityDescription: "Quota"
+        )?.withSymbolConfiguration(config) else {
             return nil
         }
         
@@ -782,6 +954,169 @@ class AppDelegate: NSObject, NSApplicationDelegate, SettingsWindowDelegate {
         coloredImage.unlockFocus()
         
         return coloredImage
+    }
+}
+
+// MARK: - Custom Menu Views
+
+/// A custom NSView used as a menu item view to show a quota section
+/// with an icon, title, progress bar, usage text, and reset time.
+class QuotaSectionView: NSView {
+
+    init(
+        icon: String,
+        title: String,
+        used: Int,
+        total: Int,
+        percent: Int,
+        resetLabel: String,
+        color: NSColor,
+        formatter: NumberFormatter
+    ) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 80))
+        buildUI(
+            icon: icon, title: title, used: used, total: total,
+            percent: percent, resetLabel: resetLabel, color: color,
+            formatter: formatter
+        )
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func buildUI(
+        icon: String, title: String, used: Int, total: Int,
+        percent: Int, resetLabel: String, color: NSColor,
+        formatter: NumberFormatter
+    ) {
+        let padding: CGFloat = 16
+        let barHeight: CGFloat = 6
+        let barWidth: CGFloat = 248 // 280 - 2 * 16
+
+        // ── Section header: icon + title ──
+        let headerY: CGFloat = 56
+        if let symbolImage = NSImage(
+            systemSymbolName: icon,
+            accessibilityDescription: title
+        ) {
+            let iconView = NSImageView(frame: NSRect(
+                x: padding, y: headerY - 1, width: 14, height: 14
+            ))
+            iconView.image = symbolImage
+            iconView.contentTintColor = .secondaryLabelColor
+            addSubview(iconView)
+        }
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = NSFont.boldSystemFont(ofSize: 12)
+        titleLabel.textColor = .labelColor
+        titleLabel.frame = NSRect(
+            x: padding + 18, y: headerY, width: 200, height: 16
+        )
+        addSubview(titleLabel)
+
+        // Percentage badge on the right
+        let percentLabel = NSTextField(
+            labelWithString: "\(percent)%"
+        )
+        percentLabel.font = NSFont.monospacedDigitSystemFont(
+            ofSize: 11, weight: .semibold
+        )
+        percentLabel.textColor = .labelColor
+        percentLabel.alignment = .right
+        percentLabel.frame = NSRect(
+            x: barWidth + padding - 40, y: headerY, width: 40, height: 16
+        )
+        addSubview(percentLabel)
+
+        // ── Progress bar ──
+        let barY: CGFloat = 42
+        let progressBar = QuotaProgressBar(
+            frame: NSRect(x: padding, y: barY, width: barWidth, height: barHeight),
+            percent: percent,
+            color: color
+        )
+        addSubview(progressBar)
+
+        // ── Usage detail line ──
+        let usedStr = formatter.string(from: NSNumber(value: used)) ?? "\(used)"
+        let totalStr = formatter.string(from: NSNumber(value: total)) ?? "\(total)"
+        let detailLabel = NSTextField(
+            labelWithString: "\(usedStr) / \(totalStr) used"
+        )
+        detailLabel.font = NSFont.monospacedDigitSystemFont(
+            ofSize: 11, weight: .regular
+        )
+        detailLabel.textColor = .secondaryLabelColor
+        detailLabel.frame = NSRect(
+            x: padding, y: 20, width: barWidth, height: 14
+        )
+        addSubview(detailLabel)
+
+        // ── Reset time line ──
+        let resetString = NSMutableAttributedString()
+        let clockAttachment = NSTextAttachment()
+        if let clockImg = NSImage(
+            systemSymbolName: "clock",
+            accessibilityDescription: "Reset time"
+        ) {
+            clockAttachment.image = clockImg
+            // Scale the image down for inline use
+            clockAttachment.bounds = CGRect(x: 0, y: -2, width: 11, height: 11)
+        }
+        resetString.append(NSAttributedString(attachment: clockAttachment))
+        resetString.append(NSAttributedString(string: " \(resetLabel)", attributes: [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: NSColor.tertiaryLabelColor
+        ]))
+
+        let resetLabel2 = NSTextField(labelWithString: "")
+        resetLabel2.attributedStringValue = resetString
+        resetLabel2.frame = NSRect(
+            x: padding, y: 4, width: barWidth, height: 14
+        )
+        addSubview(resetLabel2)
+    }
+}
+
+/// A small rounded progress bar drawn with Core Graphics.
+class QuotaProgressBar: NSView {
+    private let percent: Int
+    private let barColor: NSColor
+
+    init(frame: NSRect, percent: Int, color: NSColor) {
+        self.percent = percent
+        self.barColor = color
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let bounds = self.bounds
+        let radius = bounds.height / 2
+
+        // Track (background)
+        let trackColor = NSColor.quaternaryLabelColor
+        let trackPath = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+        trackColor.setFill()
+        trackPath.fill()
+
+        // Fill
+        let fillWidth = max(
+            bounds.height, // minimum visible width
+            bounds.width * CGFloat(min(percent, 100)) / 100.0
+        )
+        if percent > 0 {
+            let fillRect = NSRect(
+                x: 0, y: 0, width: fillWidth, height: bounds.height
+            )
+            let fillPath = NSBezierPath(
+                roundedRect: fillRect, xRadius: radius, yRadius: radius
+            )
+            barColor.setFill()
+            fillPath.fill()
+        }
     }
 }
 
